@@ -1022,8 +1022,17 @@ class TestBackendRegistryAndPlugins:
         assert purlless_res is not None
         assert purlless_res.is_vulnerable is True
 
-    def test_local_sbom_rejects_deep_json_recursion_error(self, tmp_path: Path) -> None:
+    def test_local_sbom_rejects_deep_json_recursion_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         deep_path = tmp_path / "deep.cdx.json"
         deep_path.write_text("[" * 2000 + "]" * 2000, encoding="utf-8")
+        with pytest.raises(SbomParseError, match=r"Invalid JSON|must be a JSON object"):
+            LocalSbomBackend(deep_path)
+
+        def _raise_recursion(*_args: object, **_kwargs: object) -> object:
+            raise RecursionError("maximum recursion depth exceeded")
+
+        monkeypatch.setattr(json, "loads", _raise_recursion)
         with pytest.raises(SbomParseError, match="Invalid JSON"):
             LocalSbomBackend(deep_path)

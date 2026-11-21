@@ -19,6 +19,7 @@ RUNNER = CliRunner()
 
 _MD_LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 _FENCED_CODE_RE = re.compile(r"```.*?```", re.DOTALL)
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 def _iter_nav_paths(nav_entries: Any) -> list[str]:
@@ -45,9 +46,13 @@ class TestCliVersionAndPackagingMetadata:
             assert res.exit_code == cli.EXIT_OK
             assert res.stdout.strip() == f"zerobom {expected_version}"
 
-        res_help = RUNNER.invoke(cli.app, ["--help"])
+        res_help = RUNNER.invoke(
+            cli.app,
+            ["--help"],
+            env={"NO_COLOR": "1", "TERM": "dumb"},
+        )
         assert res_help.exit_code == cli.EXIT_OK
-        assert "--version" in res_help.stdout
+        assert "--version" in _ANSI_RE.sub("", res_help.stdout)
 
     def test_pep621_metadata_license_and_typed_markers_across_packages(self) -> None:
         package_specs = [

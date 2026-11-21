@@ -381,7 +381,9 @@ class TestOpenAICompatExtractor:
         web_client.close()
         llm_client.close()
 
-    def test_prompt_fencing_response_bounds_retry_cap_and_url_error_redaction(self) -> None:
+    def test_prompt_fencing_response_bounds_retry_cap_and_url_error_redaction(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from zerobom.extract.openai_compat import MAX_LLM_RESPONSE_BYTES, MAX_RETRY_ASSISTANT_CHARS
 
         # 1) Untrusted source_name and url live inside the fence and neutralize breakout tags.
@@ -451,6 +453,14 @@ class TestOpenAICompatExtractor:
 
         # 4) Deeply nested JSON triggering RecursionError wraps cleanly into ExtractionError.
         deep_json = "[" * 2000 + "]" * 2000
+        real_json_loads = json.loads
+
+        def _guarded_loads(s: str | bytes | bytearray, *args: Any, **kwargs: Any) -> Any:
+            if s == deep_json:
+                raise RecursionError("maximum recursion depth exceeded")
+            return real_json_loads(s, *args, **kwargs)
+
+        monkeypatch.setattr(json, "loads", _guarded_loads)
         deep_client = httpx.Client(
             transport=httpx.MockTransport(
                 lambda _r: httpx.Response(

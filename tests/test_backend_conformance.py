@@ -172,7 +172,9 @@ class TestCloudAgnosticSbomParserAndIndex:
         assert len(by_upstream) == 1
         assert by_upstream[0].upstream_package == "openssl"
 
-    def test_parse_sbom_bytes_enforces_size_depth_and_schema_bounds(self) -> None:
+    def test_parse_sbom_bytes_enforces_size_depth_and_schema_bounds(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         raw = _sample_cdx_bytes()
         with pytest.raises(SbomParseError, match="exceeds maximum size"):
             parse_sbom_bytes(raw, asset_id="mem://big", backend="oci_sbom", max_bytes=32)
@@ -212,8 +214,15 @@ class TestCloudAgnosticSbomParserAndIndex:
             )
 
         deep_raw = ("[" * 2000 + "]" * 2000).encode("utf-8")
+        with pytest.raises(SbomParseError, match=r"Invalid JSON|must be a JSON object"):
+            parse_sbom_bytes(deep_raw, asset_id="mem://deep-list", backend="oci_sbom")
+
+        def _raise_recursion(*_args: object, **_kwargs: object) -> object:
+            raise RecursionError("maximum recursion depth exceeded")
+
+        monkeypatch.setattr(json, "loads", _raise_recursion)
         with pytest.raises(SbomParseError, match="Invalid JSON"):
-            parse_sbom_bytes(deep_raw, asset_id="mem://recursion", backend="oci_sbom")
+            parse_sbom_bytes(b"{}", asset_id="mem://recursion", backend="oci_sbom")
 
 
 class TestBackendConfigAndRegistryHooks:
