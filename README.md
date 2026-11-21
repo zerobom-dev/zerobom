@@ -14,8 +14,6 @@ The LLM is a narrow, replaceable **~15% extraction layer**. Every extracted clai
 
 ![zerobom offline demo](docs/assets/demo-preview.svg)
 
-*Prefer a terminal screencast? Reproduce the animated GIF with [`docs/assets/demo.tape`](docs/assets/demo.tape) via `vhs docs/assets/demo.tape`.*
-
 ---
 
 ## 60-Second Quickstart (Zero API Keys Required)
