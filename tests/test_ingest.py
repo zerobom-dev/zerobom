@@ -691,6 +691,36 @@ class TestPreReleaseSecurityRegressions:
             with pytest.raises(FetchError, match=r"DOCTYPE|ENTITY|external entity"):
                 parse_feed_entries(encoded, feed)
 
+    def test_allows_doctype_and_entity_examples_inside_cdata_while_blocking_real_dtd(
+        self,
+    ) -> None:
+        feed = SourceFeedConfig(
+            name="ZDI Style Feed",
+            url="https://feed.example.org/rss.xml",
+            tier=SourceTier.TIER_1,
+        )
+        cdata_rss = b"""<?xml version="1.0" encoding="UTF-8"?>
+        <rss version="2.0">
+          <channel>
+            <title>ZDI Style Feed</title>
+            <item>
+              <title>Advisory With HTML Snippet In CDATA</title>
+              <link>https://feed.example.org/posts/cdata-doctype</link>
+              <description><![CDATA[<!DOCTYPE html><p>Example <!ENTITY xxe SYSTEM "file:///etc/passwd"></p>]]></description>
+            </item>
+          </channel>
+        </rss>"""
+        entries = parse_feed_entries(cdata_rss, feed)
+        assert len(entries) == 1
+        assert entries[0].url == "https://feed.example.org/posts/cdata-doctype"
+
+        malformed_dtd = (
+            b'<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY bad "x">]>'
+            b"<rss><channel><item><title>Broken</title></rss>"
+        )
+        with pytest.raises(FetchError, match="DOCTYPE/ENTITY"):
+            parse_feed_entries(malformed_dtd, feed)
+
     def test_fetcher_disables_trust_env_and_uses_versioned_user_agent(
         self,
         monkeypatch: pytest.MonkeyPatch,

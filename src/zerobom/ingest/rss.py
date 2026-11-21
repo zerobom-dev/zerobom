@@ -35,8 +35,6 @@ MAX_SOURCES_YAML_BYTES = 1024 * 1024
 MAX_SITEMAP_URLS = 5000
 MAX_HTML_LINKS = 5000
 
-# Reject XML DOCTYPE/ENTITY declarations prior to XML parsing to prevent XXE/entity expansion.
-_DTD_OR_ENTITY_RE = re.compile(rb"<!(?:DOCTYPE|ENTITY)\b", re.IGNORECASE)
 _HTML_CONTENT_TYPES: frozenset[str] = frozenset({"text/html", "application/xhtml+xml"})
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]+")
 _WHITESPACE_RE = re.compile(r"\s+")
@@ -142,11 +140,13 @@ def _decode_xml_for_policy_scan(xml_bytes: bytes) -> str:
 
 
 def _reject_xml_xxe(xml_bytes: bytes, source_name: str) -> None:
-    """Fail closed if XML input declares DOCTYPE or ENTITY directives in any encoding."""
-    if _DTD_OR_ENTITY_RE.search(xml_bytes):
-        raise _XmlPolicyError(
-            f"Feed {source_name!r} rejected: XML contains disallowed DOCTYPE/ENTITY declaration."
-        )
+    """Fail closed if XML input declares DOCTYPE or ENTITY directives in any encoding.
+
+    Runs ``expat`` before fallback byte regex scanning so valid feeds containing literal
+    ``<!DOCTYPE html>`` or ``<!ENTITY ...>`` examples inside ``<![CDATA[...]]>`` post bodies
+    are accepted as character data, while real DTD/entity declarations and malformed XML with
+    DOCTYPE/ENTITY declarations still fail closed.
+    """
 
     def _on_disallowed(*_args: Any) -> None:
         raise _XmlPolicyError(
@@ -171,7 +171,7 @@ def _reject_xml_xxe(xml_bytes: bytes, source_name: str) -> None:
     except _XmlPolicyError:
         raise
     except expat.ExpatError:
-        # Bozo/truncated feeds can fail expat mid-stream (e.g., UTF-16 or HTML entities);
+        # Bozo/truncated feeds or non-UTF-8 encodings without BOM can fail expat mid-stream;
         # run a BOM/NUL-aware scan so encoded DOCTYPE/ENTITY declarations cannot slip past.
         decoded = _decode_xml_for_policy_scan(xml_bytes)
         if re.search(r"<!\s*(?:DOCTYPE|ENTITY)\b", decoded, re.IGNORECASE):

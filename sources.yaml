@@ -1,11 +1,17 @@
 # Allowlisted security research discovery sources.
 # Optional per-feed discovery fields:
-#   kind: rss | sitemap | html_index | auto   (default: rss)
-#   url_prefix: "https://example.org/blog/"   (same-origin prefix filter; required for html_index)
+#   kind: rss | sitemap | html_index | auto (default: rss)
+#   url_prefix: "https://example.org/blog/" (same-origin prefix filter; required for html_index)
+# Valid SourceTier values:
+#   tier_1 (weight 1.0) | tier_2 (weight 0.85) | unknown (weight 0.55 — caps at TRIAGE, never AUTO)
 version: 1
 feeds:
+  # =========================================================================
+  # TIER 1 — Primary Original Vulnerability Research & 0-Day Disclosures
+  # Default enabled (19 high-signal OSS, cloud, and pre-CVE feeds)
+  # =========================================================================
   - name: "Google Project Zero"
-    url: "https://googleprojectzero.blogspot.com/feeds/posts/default"
+    url: "https://projectzero.google/feed.xml"
     tier: "tier_1"
     enabled: true
     tags:
@@ -13,7 +19,7 @@ feeds:
       - zero-day
 
   - name: "Wiz Research"
-    url: "https://www.wiz.io/blog/rss.xml"
+    url: "https://www.wiz.io/feed/rss.xml"
     tier: "tier_1"
     enabled: true
     tags:
@@ -21,7 +27,7 @@ feeds:
       - supply-chain
 
   - name: "Trail of Bits"
-    url: "https://blog.trailofbits.com/feed/"
+    url: "https://blog.trailofbits.com/index.xml"
     tier: "tier_1"
     enabled: true
     tags:
@@ -36,6 +42,226 @@ feeds:
       - supply-chain
       - packages
 
+  - name: "CERT/CC Vulnerability Notes"
+    url: "https://www.kb.cert.org/vuls/atomfeed/"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - advisories
+      - coordinated-disclosure
+      - pre-cve
+
+  - name: "watchTowr Labs"
+    url: "https://labs.watchtowr.com/rss/"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - zero-day
+      - pre-cve
+      - edge-devices
+
+  - name: "Qualys Threat Research Unit (TRU)"
+    url: "https://blog.qualys.com/vulnerabilities-threat-research/feed"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - linux
+      - pre-cve
+      - distro-packages
+
+  - name: "Socket Research"
+    url: "https://socket.dev/api/blog/feed.atom"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - supply-chain
+      - npm
+      - pypi
+      - malware
+
+  - name: "Aikido Security"
+    url: "https://www.aikido.dev/blog/rss.xml"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - supply-chain
+      - npm
+      - malware
+
+  - name: "Sonar Research"
+    url: "https://www.sonarsource.com/rss/blog.xml"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - open-source
+      - code-vulns
+
+  - name: "Zero Day Initiative (ZDI) Blog"
+    url: "https://www.zerodayinitiative.com/blog/?format=rss"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - zero-day
+      - advisories
+
+  - name: "Synacktiv"
+    url: "https://www.synacktiv.com/en/feed/lastblog.xml"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - research
+      - zero-day
+
+  - name: "Quarkslab"
+    url: "https://blog.quarkslab.com/feeds/all.atom.xml"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - research
+      - open-source
+      - cryptography
+
+  - name: "ProjectDiscovery Research"
+    url: "https://projectdiscovery.io/rss.xml"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - zero-day
+      - poc
+      - web
+
+  - name: "Orca Security Research"
+    url: "https://orca.security/research/"
+    kind: "html_index"
+    url_prefix: "https://orca.security/resources/blog/"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - cloud
+      - zero-day
+      - open-source
+
+  - name: "Google Threat Intelligence Group (Mandiant & TAG)"
+    url: "https://feeds.feedburner.com/threatintelligence/pvexyqv7v0v"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - zero-day
+      - itw-exploitation
+
+  - name: "Openwall oss-security (SecLists RSS)"
+    url: "https://seclists.org/rss/oss-sec.rss"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - open-source
+      - pre-cve
+      - mailing-list
+
+  - name: "GitHub Security Lab"
+    url: "https://github.blog/tag/github-security-lab/feed/"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - open-source
+      - research
+
+  - name: "Assetnote / Searchlight Cyber Research Center"
+    url: "https://www.slcyber.io/research"
+    kind: "html_index"
+    url_prefix: "https://www.slcyber.io/research/"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - zero-day
+      - web
+      - research
+
+  # =========================================================================
+  # TIER 1 (Opt-In) — Additional Research & Specialized Threat Feeds
+  # =========================================================================
+  - name: "Check Point Research"
+    url: "https://research.checkpoint.com/feed/"
+    tier: "tier_1"
+    enabled: false
+    tags:
+      - research
+      - zero-day
+
+  - name: "Cisco Talos Intelligence"
+    url: "https://blog.talosintelligence.com/rss/"
+    tier: "tier_1"
+    enabled: false
+    tags:
+      - research
+      - advisories
+
+  - name: "Palo Alto Networks Unit 42"
+    url: "https://unit42.paloaltonetworks.com/category/threat-research/feed/"
+    tier: "tier_1"
+    enabled: false
+    tags:
+      - threat-research
+      - itw-exploitation
+
+  - name: "CrowdStrike Threat Intelligence"
+    url: "https://www.crowdstrike.com/en-us/blog/"
+    kind: "html_index"
+    url_prefix: "https://www.crowdstrike.com/en-us/blog/"
+    tier: "tier_1"
+    enabled: false
+    tags:
+      - zero-day
+      - itw-exploitation
+
+  - name: "STAR Labs SG"
+    url: "https://starlabs.sg/blog/index.xml"
+    tier: "tier_1"
+    enabled: false
+    tags:
+      - zero-day
+      - research
+
+  - name: "DEVCORE"
+    url: "https://devco.re/rss"
+    tier: "tier_1"
+    enabled: false
+    tags:
+      - zero-day
+      - web
+      - research
+
+  - name: "Citizen Lab"
+    url: "https://citizenlab.ca/category/research/feed/"
+    tier: "tier_1"
+    enabled: false
+    tags:
+      - zero-day
+      - itw-exploitation
+
+  - name: "Claroty Team82 Disclosure Dashboard"
+    url: "https://claroty.com/team82/disclosure-dashboard/feed/atom"
+    tier: "tier_1"
+    enabled: false
+    tags:
+      - firmware
+      - ot-iot
+      - advisories
+
+  - name: "Volexity"
+    url: "https://www.volexity.com/blog/"
+    kind: "html_index"
+    url_prefix: "https://www.volexity.com/blog/"
+    tier: "tier_1"
+    enabled: false
+    tags:
+      - zero-day
+      - itw-exploitation
+
+  # =========================================================================
+  # TIER 2 — Vendor, Ecosystem, Supply-Chain & AppSec Research
+  # Default enabled (7 core AppSec / OSS ecosystem feeds)
+  # =========================================================================
   - name: "PortSwigger Research"
     url: "https://portswigger.net/research/rss"
     tier: "tier_2"
@@ -50,12 +276,333 @@ feeds:
     enabled: true
     tags:
       - ecosystems
-      - oss
+      - open-source
 
-  - name: "Bishop Fox"
-    url: "https://bishopfox.com/feeds/blog.xml"
+  - name: "JFrog Security Research"
+    url: "https://jfrog.com/blog/tag/security-research/feed/"
+    tier: "tier_2"
+    enabled: true
+    tags:
+      - supply-chain
+      - packages
+      - open-source
+
+  - name: "GitHub Security Blog"
+    url: "https://github.blog/security/feed/"
+    tier: "tier_2"
+    enabled: true
+    tags:
+      - open-source
+      - supply-chain
+
+  - name: "Doyensec"
+    url: "https://blog.doyensec.com/atom.xml"
+    tier: "tier_2"
+    enabled: true
+    tags:
+      - appsec
+      - open-source
+
+  - name: "Cloudflare Security Blog"
+    url: "https://blog.cloudflare.com/tag/security/rss/"
+    tier: "tier_2"
+    enabled: true
+    tags:
+      - open-source
+      - zero-day
+
+  - name: "Tenable Research Advisories"
+    url: "https://www.tenable.com/security/research/feed"
     tier: "tier_2"
     enabled: true
     tags:
       - advisories
+      - coordinated-disclosure
+
+  # =========================================================================
+  # TIER 2 (Opt-In) — Extended Vendor, Ecosystem & Sector Feeds
+  # =========================================================================
+  - name: "Checkmarx Zero"
+    url: "https://checkmarx.com/feed/"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - supply-chain
+      - packages
+
+  - name: "Endor Labs"
+    url: "https://www.endorlabs.com/learn/rss.xml"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - open-source
+      - supply-chain
+
+  - name: "Sonatype Security Research"
+    url: "https://www.sonatype.com/blog/rss.xml"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - supply-chain
+      - open-source
+
+  - name: "StepSecurity"
+    url: "https://www.stepsecurity.io/blog/rss.xml"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - ci-cd
+      - github-actions
+
+  - name: "Aqua Security Research (Nautilus)"
+    url: "https://www.aquasec.com/category/research/feed/"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - cloud
+      - containers
+      - k8s
+
+  - name: "Horizon3.ai Attack Team"
+    url: "https://horizon3.ai/feed/"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - poc
+      - pre-cve
+
+  - name: "Google Online Security Blog"
+    url: "https://feeds.feedburner.com/GoogleOnlineSecurityBlog"
+    tier: "tier_2"
+    enabled: false
+    tags:
       - research
+      - ecosystems
+
+  - name: "SentinelLabs"
+    url: "https://www.sentinelone.com/labs/feed/"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - threat-research
+      - zero-day
+
+  - name: "Rapid7 Blog"
+    url: "https://www.rapid7.com/rss.xml"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - zero-day
+      - itw-exploitation
+
+  - name: "Huntress Threat Intelligence"
+    url: "https://www.huntress.com/blog/rss.xml"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - zero-day
+      - itw-exploitation
+
+  - name: "ESET WeLiveSecurity"
+    url: "https://www.welivesecurity.com/en/rss/feed/"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - zero-day
+      - itw-exploitation
+
+  - name: "Kaspersky Securelist"
+    url: "https://securelist.com/feed/"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - zero-day
+      - itw-exploitation
+
+  - name: "Wordfence Blog"
+    url: "https://www.wordfence.com/feed/"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - wordpress
+      - php
+      - zero-day
+
+  - name: "Patchstack Articles"
+    url: "https://patchstack.com/feed/1.xml"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - wordpress
+      - php
+      - advisories
+
+  - name: "Binarly Research"
+    url: "https://www.binarly.io/blog/rss.xml"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - firmware
+      - supply-chain
+
+  - name: "GreyNoise Intelligence"
+    url: "https://www.greynoise.io/blog/rss.xml"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - zero-day
+      - itw-exploitation
+
+  - name: "Exodus Intelligence"
+    url: "https://blog.exodusintel.com/feed/"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - zero-day
+      - research
+
+  - name: "Mozilla Security Blog"
+    url: "https://blog.mozilla.org/security/feed/"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - browsers
+      - open-source
+
+  - name: "Praetorian"
+    url: "https://www.praetorian.com/feed/"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - research
+      - pre-cve
+
+  - name: "Nozomi Networks Labs"
+    url: "https://www.nozominetworks.com/blog"
+    kind: "html_index"
+    url_prefix: "https://www.nozominetworks.com/blog/"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - firmware
+      - ot-iot
+      - advisories
+
+  - name: "Microsoft Security Blog"
+    url: "https://www.microsoft.com/en-us/security/blog/feed/"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - advisories
+      - zero-day
+
+  - name: "ReversingLabs Threat Research"
+    url: "https://www.reversinglabs.com/blog/rss.xml"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - supply-chain
+      - packages
+      - malware
+
+  - name: "Bishop Fox"
+    url: "https://bishopfox.com/feeds/blog.rss"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - advisories
+      - research
+
+  - name: "Semgrep Blog"
+    url: "https://semgrep.dev/blog/"
+    kind: "html_index"
+    url_prefix: "https://semgrep.dev/blog/"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - open-source
+      - supply-chain
+
+  - name: "NCC Group Research"
+    url: "https://www.nccgroup.com/research/"
+    kind: "html_index"
+    url_prefix: "https://www.nccgroup.com/research/"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - research
+      - advisories
+
+  - name: "Oligo Security"
+    url: "https://www.oligo.security/resources/blog"
+    kind: "html_index"
+    url_prefix: "https://www.oligo.security/blog/"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - runtime
+      - open-source
+
+  - name: "Sysdig Threat Research"
+    url: "https://www.sysdig.com/blog"
+    kind: "html_index"
+    url_prefix: "https://www.sysdig.com/blog/"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - cloud
+      - containers
+
+  - name: "Elastic Security Labs"
+    url: "https://www.elastic.co/security-labs"
+    kind: "html_index"
+    url_prefix: "https://www.elastic.co/security-labs/"
+    tier: "tier_2"
+    enabled: false
+    tags:
+      - research
+      - detection
+
+  # =========================================================================
+  # UNKNOWN (Triage-Only, Opt-In) — Mailing Lists & Secondary Security News
+  # Weight 0.55: claims always cap at TRIAGE for human approval, never AUTO.
+  # =========================================================================
+  - name: "Full Disclosure"
+    url: "https://seclists.org/rss/fulldisclosure.rss"
+    tier: "unknown"
+    enabled: false
+    tags:
+      - pre-cve
+      - mailing-list
+
+  - name: "SANS ISC Diary"
+    url: "https://isc.sans.edu/rssfeed_full.xml"
+    tier: "unknown"
+    enabled: false
+    tags:
+      - itw-exploitation
+      - early-signal
+
+  - name: "BleepingComputer"
+    url: "https://www.bleepingcomputer.com/feed/"
+    tier: "unknown"
+    enabled: false
+    tags:
+      - news
+      - zero-day
+
+  - name: "The Hacker News"
+    url: "https://feeds.feedburner.com/TheHackersNews"
+    tier: "unknown"
+    enabled: false
+    tags:
+      - news
+      - supply-chain
+
+  - name: "Risky Business News"
+    url: "https://news.risky.biz/rss/"
+    tier: "unknown"
+    enabled: false
+    tags:
+      - news
+      - zero-day
