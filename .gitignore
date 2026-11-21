@@ -1,0 +1,33 @@
+# Virtual environments
+.venv/
+.venv-*/
+venv/
+
+# Python / build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+site/
+htmlcov/
+.coverage
+.coverage.*
+
+# Caches, local state, and generated reports
+.cache/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.zerobom/
+.zerobom-reports/
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+
+# Local secrets & environment overrides
+.env
+.env.*
+!.env.example

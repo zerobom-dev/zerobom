@@ -1,0 +1,36 @@
+name: "Bug Report"
+description: Report a bug in verification, ingestion, inventory backends, CLI, or alerting.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If you found a **security vulnerability** (SSRF bypass, injection, credential exposure), do not file a public issue—use **GitHub Private Vulnerability Reporting** (`SECURITY.md`).
+  - type: input
+    id: version
+    attributes:
+      label: zerobom Version (`zerobom --version`)
+      placeholder: zerobom 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: python_os
+    attributes:
+      label: Python Version & OS
+      placeholder: Python 3.12 on Ubuntu 24.04 / Windows 11
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal Sanitized Reproduction Steps
+      description: Describe the CLI command or API call and attach a minimal redacted fixture (<100 lines) with no secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: expected_actual
+    attributes:
+      label: Expected vs. Actual Behavior
+    validations:
+      required: true

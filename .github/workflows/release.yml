@@ -1,0 +1,210 @@
+name: Release & Publish Packages
+
+on:
+  push:
+    tags:
+      - "v*"
+      - "plugins-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-verify:
+    name: Build & Smoke-Test Core Distribution
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up uv and Python 3.12
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Sync workspace and run release safety gates
+        run: |
+          uv sync --locked --all-extras
+          uv run pytest -v
+          uv run python benchmarks/run_evals.py --mode offline
+
+      - name: Verify git tag matches core package and Action versions
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          uv run python - <<'PY'
+          import os, pathlib, tomllib, yaml, zerobom
+          tag_ver = os.environ["TAG_NAME"].removeprefix("v")
+          pyproject_ver = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+          assert pyproject_ver == tag_ver, f"pyproject.toml={pyproject_ver!r} != tag={tag_ver!r}"
+          assert zerobom.__version__ == tag_ver, f"zerobom.__version__={zerobom.__version__!r} != tag={tag_ver!r}"
+          action_ver = yaml.safe_load(pathlib.Path("action.yml").read_text(encoding="utf-8"))["inputs"]["zerobom-version"]["default"]
+          assert action_ver == tag_ver, f"action.yml={action_ver!r} != tag={tag_ver!r}"
+          PY
+
+      - name: Build core wheel and sdist
+        run: |
+          rm -rf dist
+          mkdir -p dist
+          uv build --out-dir dist .
+
+      - name: Verify core sdist boundaries, bundled data fixtures, and isolated wheel execution
+        run: |
+          python3 - <<'PY'
+          import pathlib, tarfile, zipfile
+          dist_dir = pathlib.Path("dist")
+          core_wheels = sorted(dist_dir.glob("zerobom-*.whl"))
+          core_sdists = sorted(dist_dir.glob("zerobom-*.tar.gz"))
+          assert len(core_wheels) == 1, f"Expected single core wheel, got {core_wheels}"
+          assert len(core_sdists) == 1, f"Expected single core sdist, got {core_sdists}"
+          with zipfile.ZipFile(core_wheels[0]) as zf:
+              names = set(zf.namelist())
+              for required in (
+                  "zerobom/data/demo_article.json",
+                  "zerobom/data/demo_extracted.json",
+                  "zerobom/data/demo_sbom.cdx.json",
+                  "zerobom/py.typed",
+              ):
+                  assert required in names, f"Missing {required} inside core wheel"
+          with tarfile.open(core_sdists[0]) as tf:
+              sdist_names = tf.getnames()
+              for forbidden in ("AGENTS.md", "LAUNCH_KIT.md", "PHASE2_PLAN.md", "ROADMAP.md", "/plugins/", ".cache"):
+                  assert not any(forbidden in entry for entry in sdist_names), f"Unexpected {forbidden!r} in core sdist"
+          PY
+          CORE_WHL="$(ls dist/zerobom-[0-9]*.whl)"
+          SMOKE_VENV="$(mktemp -d)"
+          SMOKE_CWD="$(mktemp -d)"
+          uv venv "$SMOKE_VENV"
+          uv pip install --python "$SMOKE_VENV/bin/python" "$CORE_WHL"
+          (
+            cd "$SMOKE_CWD"
+            "$SMOKE_VENV/bin/zerobom" --version
+            "$SMOKE_VENV/bin/zerobom" demo --json-out "$SMOKE_CWD/wheel-demo.json" --sarif-out "$SMOKE_CWD/wheel-demo.sarif"
+            "$SMOKE_VENV/bin/zerobom" backends
+          )
+          rm -rf "$SMOKE_VENV" "$SMOKE_CWD"
+
+      - name: Upload verified core distributions
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: zerobom-dist
+          path: dist/*
+
+  publish-pypi:
+    name: Publish Core to PyPI (OIDC Trusted Publishing)
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-and-verify
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/p/zerobom
+    steps:
+      - name: Download verified core distributions
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: zerobom-dist
+          path: dist
+
+      - name: Publish core package via PyPI OIDC
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
+        with:
+          packages-dir: dist/
+
+  github-release:
+    name: Create Core GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified core distributions
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: zerobom-dist
+          path: dist
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+
+  build-and-verify-plugins:
+    name: Build & Verify Cloud Plugin Distributions
+    if: startsWith(github.ref, 'refs/tags/plugins-v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up uv and Python 3.12
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Sync workspace and test cloud plugins
+        run: |
+          uv sync --locked --all-extras
+          uv run pytest tests/test_cloud_plugins.py -v
+
+      - name: Verify plugins git tag matches plugin versions
+        if: startsWith(github.ref, 'refs/tags/plugins-v')
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          uv run python - <<'PY'
+          import os, pathlib, tomllib
+          tag_ver = os.environ["TAG_NAME"].removeprefix("plugins-v")
+          for plugin_dir in ("zerobom-aws", "zerobom-gcp", "zerobom-azure"):
+              ver = tomllib.loads(
+                  pathlib.Path("plugins", plugin_dir, "pyproject.toml").read_text(encoding="utf-8")
+              )["project"]["version"]
+              assert ver == tag_ver, f"{plugin_dir} version={ver!r} != tag={tag_ver!r}"
+          PY
+
+      - name: Build cloud plugin wheels and sdists
+        run: |
+          rm -rf dist-plugins
+          mkdir -p dist-plugins
+          uv build --out-dir dist-plugins plugins/zerobom-aws
+          uv build --out-dir dist-plugins plugins/zerobom-gcp
+          uv build --out-dir dist-plugins plugins/zerobom-azure
+
+      - name: Upload verified cloud plugin distributions
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: zerobom-plugins-dist
+          path: dist-plugins/*
+
+  publish-plugins-pypi:
+    name: Publish Cloud Plugins to PyPI (OIDC Trusted Publishing)
+    if: startsWith(github.ref, 'refs/tags/plugins-v')
+    needs: build-and-verify-plugins
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: pypi
+    steps:
+      - name: Download verified cloud plugin distributions
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: zerobom-plugins-dist
+          path: dist-plugins
+
+      - name: Publish cloud plugin packages via PyPI OIDC
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
+        with:
+          packages-dir: dist-plugins/

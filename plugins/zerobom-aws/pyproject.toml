@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "zerobom-aws"
+version = "0.1.0"
+description = "AWS Security Hub and S3 SBOM inventory backend plugins for zerobom."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [
+    { name = "zerobom Contributors" },
+]
+keywords = ["zerobom", "aws", "securityhub", "s3", "sbom", "pre-cve"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Typing :: Typed",
+]
+dependencies = [
+    "zerobom>=0.1.0,<0.2.0",
+    "boto3>=1.35",
+]
+
+[project.urls]
+Homepage = "https://zerobom.dev/"
+Documentation = "https://zerobom.dev/backends/"
+Repository = "https://github.com/zerobom-dev/zerobom"
+Issues = "https://github.com/zerobom-dev/zerobom/issues"
+
+[project.entry-points."zerobom.backends"]
+aws_security_hub = "zerobom_aws.security_hub:AwsSecurityHubBackend"
+s3_sbom = "zerobom_aws.s3_sbom:S3SbomBackend"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/zerobom_aws"]

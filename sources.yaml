@@ -1,0 +1,61 @@
+# Allowlisted security research discovery sources.
+# Optional per-feed discovery fields:
+#   kind: rss | sitemap | html_index | auto   (default: rss)
+#   url_prefix: "https://example.org/blog/"   (same-origin prefix filter; required for html_index)
+version: 1
+feeds:
+  - name: "Google Project Zero"
+    url: "https://googleprojectzero.blogspot.com/feeds/posts/default"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - research
+      - zero-day
+
+  - name: "Wiz Research"
+    url: "https://www.wiz.io/blog/rss.xml"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - cloud
+      - supply-chain
+
+  - name: "Trail of Bits"
+    url: "https://blog.trailofbits.com/feed/"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - research
+      - open-source
+
+  - name: "Datadog Security Labs"
+    url: "https://securitylabs.datadoghq.com/rss/feed.xml"
+    tier: "tier_1"
+    enabled: true
+    tags:
+      - supply-chain
+      - packages
+
+  - name: "PortSwigger Research"
+    url: "https://portswigger.net/research/rss"
+    tier: "tier_2"
+    enabled: true
+    tags:
+      - web
+      - libraries
+
+  - name: "Snyk Security Research"
+    url: "https://snyk.io/blog/feed/"
+    tier: "tier_2"
+    enabled: true
+    tags:
+      - ecosystems
+      - oss
+
+  - name: "Bishop Fox"
+    url: "https://bishopfox.com/feeds/blog.xml"
+    tier: "tier_2"
+    enabled: true
+    tags:
+      - advisories
+      - research

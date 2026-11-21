@@ -1,0 +1,48 @@
+{
+  "article_url": "https://research.example.org/advisories/pre-cve-demo-2026",
+  "title": "Pre-CVE Advisory: Proxy Credential Leak in Requests & OpenSSL TLS Parsing Flaw",
+  "summary": "Pre-CVE advisory covering proxy credential leak in Python requests < 2.31.0 and memory flaw in Debian openssl < 1.1.1n-0+deb11u5.",
+  "details": "Bundled offline demonstration advisory illustrating deterministic quote grounding, generic-name blocking, OSV compilation, and SBOM matching.",
+  "severity": "HIGH",
+  "cwe_ids": ["CWE-918", "CWE-119"],
+  "claims": [
+    {
+      "raw_package_name": "Python requests",
+      "ecosystem": "pypi",
+      "version_constraints": [
+        {
+          "introduced": "0",
+          "fixed": "2.31.0"
+        }
+      ],
+      "evidence_quote": "Python requests versions prior to 2.31.0 when handling HTTP redirects",
+      "fix_commit_url": "https://github.com/psf/requests/commit/74ea7cf7a6a27a4eeb2ae24e162bcc942a67476c"
+    },
+    {
+      "raw_package_name": "Debian openssl",
+      "ecosystem": "debian",
+      "distro_release": "11",
+      "version_constraints": [
+        {
+          "introduced": "0",
+          "fixed": "1.1.1n-0+deb11u5"
+        }
+      ],
+      "evidence_quote": "Debian openssl versions before 1.1.1n-0+deb11u5 on Debian 11 systems"
+    },
+    {
+      "raw_package_name": "utils",
+      "ecosystem": "pypi",
+      "version_constraints": [
+        {
+          "introduced": "0",
+          "fixed": "1.0.0"
+        }
+      ],
+      "evidence_quote": "An unrelated internal utils helper was also audited with no impact."
+    }
+  ],
+  "published_at": "2026-03-15T14:30:00Z",
+  "prompt_version": "v1.0",
+  "extractor_model": "offline-demo-fixture"
+}

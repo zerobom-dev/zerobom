@@ -1,0 +1,31 @@
+name: "Request or Share Inventory Plugin"
+description: Request support for a new SBOM / inventory backend or register a community zerobom.backends plugin.
+title: "[Plugin]: "
+labels: ["plugin", "enhancement"]
+body:
+  - type: input
+    id: backend_name
+    attributes:
+      label: Inventory System / Platform
+      placeholder: e.g. Trivy Server, Anchore Syft API, Harbor Registry
+    validations:
+      required: true
+  - type: input
+    id: package_name
+    attributes:
+      label: Existing PyPI Package Name (if submitting a community plugin)
+      placeholder: zerobom-harbor
+  - type: textarea
+    id: api_details
+    attributes:
+      label: Upstream API & Authentication Summary
+      description: How are packages (PURL/name/version) and asset references retrieved? Keep auth read-only where possible.
+    validations:
+      required: true
+  - type: checkboxes
+    id: conformance
+    attributes:
+      label: Conformance Readiness
+      options:
+        - label: Implements InventoryBackend without embedding cloud SDKs in core zerobom
+        - label: Passes zerobom.backends.assert_backend_conformance offline with mocked HTTP/SDK responses

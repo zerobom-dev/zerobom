@@ -1,0 +1,1212 @@
+{
+  "suite": "live",
+  "model_name": "gpt-4o-mini",
+  "prompt_version": "v1.4",
+  "total_cases": 46,
+  "routing_accuracy": 0.9783,
+  "package_precision": 1.0,
+  "package_recall": 0.9737,
+  "package_f1": 0.9867,
+  "probe_accuracy": 0.9647,
+  "quote_grounding_rate": 0.9756,
+  "hallucination_escape_rate": 0.0,
+  "false_positive_trap_rate": 0.0,
+  "confusion_matrix": {
+    "auto": {
+      "auto": 34,
+      "triage": 0,
+      "drop": 1
+    },
+    "triage": {
+      "auto": 0,
+      "triage": 1,
+      "drop": 0
+    },
+    "drop": {
+      "auto": 0,
+      "triage": 0,
+      "drop": 10
+    }
+  },
+  "case_results": [
+    {
+      "case_id": "precve-pypi-01-requests-netrc",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:pypi/requests"
+      ],
+      "actual_purls": [
+        "pkg:pypi/requests"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-pypi-02-urllib3-proxy-auth",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:pypi/urllib3"
+      ],
+      "actual_purls": [
+        "pkg:pypi/urllib3"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 3,
+      "probe_total": 3,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-pypi-03-pyyaml-full-load",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:pypi/pyyaml"
+      ],
+      "actual_purls": [
+        "pkg:pypi/pyyaml"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-pypi-04-pillow-imagefont",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:pypi/pillow"
+      ],
+      "actual_purls": [
+        "pkg:pypi/pillow"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 3,
+      "probe_total": 3,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-pypi-05-cryptography-pkcs12",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:pypi/cryptography"
+      ],
+      "actual_purls": [
+        "pkg:pypi/cryptography"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-pypi-06-jinja2-attr-escape",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:pypi/jinja2"
+      ],
+      "actual_purls": [
+        "pkg:pypi/jinja2"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-npm-07-lodash-proto",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:npm/lodash"
+      ],
+      "actual_purls": [
+        "pkg:npm/lodash"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-npm-08-babel-traverse",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:npm/%40babel/traverse"
+      ],
+      "actual_purls": [
+        "pkg:npm/%40babel/traverse"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-npm-09-axios-ssrf",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:npm/axios"
+      ],
+      "actual_purls": [
+        "pkg:npm/axios"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 3,
+      "probe_total": 3,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-npm-10-semver-redos",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:npm/semver"
+      ],
+      "actual_purls": [
+        "pkg:npm/semver"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-npm-11-express-open-redirect",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:npm/express"
+      ],
+      "actual_purls": [
+        "pkg:npm/express"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-npm-12-ws-dos",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:npm/ws"
+      ],
+      "actual_purls": [
+        "pkg:npm/ws"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-maven-13-log4j-jndi",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:maven/org.apache.logging.log4j/log4j-core"
+      ],
+      "actual_purls": [
+        "pkg:maven/org.apache.logging.log4j/log4j-core"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-maven-14-spring-beans",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:maven/org.springframework/spring-beans"
+      ],
+      "actual_purls": [
+        "pkg:maven/org.springframework/spring-beans"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-maven-15-jackson-databind",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:maven/com.fasterxml.jackson.core/jackson-databind"
+      ],
+      "actual_purls": [
+        "pkg:maven/com.fasterxml.jackson.core/jackson-databind"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-maven-16-netty-http2",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:maven/io.netty/netty-handler"
+      ],
+      "actual_purls": [
+        "pkg:maven/io.netty/netty-handler"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-maven-17-commons-text",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:maven/org.apache.commons/commons-text"
+      ],
+      "actual_purls": [
+        "pkg:maven/org.apache.commons/commons-text"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-go-18-gin-proxy-header",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:golang/github.com/gin-gonic/gin"
+      ],
+      "actual_purls": [
+        "pkg:golang/github.com/gin-gonic/gin"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-go-19-golang-jwt",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:golang/github.com/golang-jwt/jwt/v5"
+      ],
+      "actual_purls": [
+        "pkg:golang/github.com/golang-jwt/jwt/v5"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-go-20-x-crypto-ssh",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:golang/golang.org/x/crypto"
+      ],
+      "actual_purls": [
+        "pkg:golang/golang.org/x/crypto"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-go-21-gogo-protobuf",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:golang/github.com/gogo/protobuf"
+      ],
+      "actual_purls": [
+        "pkg:golang/github.com/gogo/protobuf"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-go-22-gorilla-websocket",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:golang/github.com/gorilla/websocket"
+      ],
+      "actual_purls": [
+        "pkg:golang/github.com/gorilla/websocket"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-os-23-deb-xz-utils",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:deb/debian/xz-utils"
+      ],
+      "actual_purls": [
+        "pkg:deb/debian/xz-utils"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 3,
+      "probe_total": 3,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-os-24-rpm-openssh",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "drop",
+      "routing_match": false,
+      "expected_purls": [
+        "pkg:rpm/redhat/openssh"
+      ],
+      "actual_purls": [],
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 1,
+      "grounded_claims": 0,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 0,
+      "probe_total": 3,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": [
+        "Missing compiled OSV advisory for 3 expected version probe(s).",
+        "All extracted package claims were dropped during verification.",
+        "Evidence quote does not appear in article body.",
+        "Capped specificity below DROP threshold due to ungrounded quote."
+      ]
+    },
+    {
+      "case_id": "precve-os-25-apk-curl",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:apk/alpine/curl"
+      ],
+      "actual_purls": [
+        "pkg:apk/alpine/curl"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-os-26-deb-ubuntu-sudo",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:deb/ubuntu/sudo"
+      ],
+      "actual_purls": [
+        "pkg:deb/ubuntu/sudo"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-os-27-deb-openssl",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:deb/debian/openssl"
+      ],
+      "actual_purls": [
+        "pkg:deb/debian/openssl"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-cargo-28-rustls",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:cargo/rustls"
+      ],
+      "actual_purls": [
+        "pkg:cargo/rustls"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-gem-29-activesupport",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:gem/activesupport"
+      ],
+      "actual_purls": [
+        "pkg:gem/activesupport"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-composer-30-symfony",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:composer/symfony/http-kernel"
+      ],
+      "actual_purls": [
+        "pkg:composer/symfony/http-kernel"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-nuget-31-newtonsoft",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:nuget/Newtonsoft.Json"
+      ],
+      "actual_purls": [
+        "pkg:nuget/Newtonsoft.Json"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-edge-32-multipkg-fastapi-starlette",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:pypi/starlette",
+        "pkg:pypi/fastapi"
+      ],
+      "actual_purls": [
+        "pkg:pypi/starlette",
+        "pkg:pypi/fastapi"
+      ],
+      "true_positives": 2,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 2,
+      "total_claims": 2,
+      "hallucination_escaped": false,
+      "probe_passed": 4,
+      "probe_total": 4,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-edge-33-unknown-tier-redis",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "triage",
+      "actual_routing": "triage",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:pypi/redis"
+      ],
+      "actual_purls": [
+        "pkg:pypi/redis"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-edge-34-prompt-injection-werkzeug",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:pypi/werkzeug"
+      ],
+      "actual_purls": [
+        "pkg:pypi/werkzeug"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 1,
+      "total_claims": 1,
+      "hallucination_escaped": false,
+      "probe_passed": 2,
+      "probe_total": 2,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-generic-35-ruby-multibranch",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:generic/ruby"
+      ],
+      "actual_purls": [
+        "pkg:generic/ruby"
+      ],
+      "true_positives": 1,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 3,
+      "total_claims": 3,
+      "hallucination_escaped": false,
+      "probe_passed": 6,
+      "probe_total": 6,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "precve-os-36-cloudlinux-kernel-zdi",
+      "suite": "live",
+      "category": "precve",
+      "expected_routing": "auto",
+      "actual_routing": "auto",
+      "routing_match": true,
+      "expected_purls": [
+        "pkg:rpm/cloudlinux/kernel",
+        "pkg:rpm/cloudlinux/kernel-lts"
+      ],
+      "actual_purls": [
+        "pkg:rpm/cloudlinux/kernel",
+        "pkg:rpm/cloudlinux/kernel-lts"
+      ],
+      "true_positives": 2,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 3,
+      "total_claims": 3,
+      "hallucination_escaped": false,
+      "probe_passed": 4,
+      "probe_total": 4,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "trap-mkt-01-series-b",
+      "suite": "live",
+      "category": "marketing_trap",
+      "expected_routing": "drop",
+      "actual_routing": "drop",
+      "routing_match": true,
+      "expected_purls": [],
+      "actual_purls": [],
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 0,
+      "total_claims": 0,
+      "hallucination_escaped": false,
+      "probe_passed": 0,
+      "probe_total": 0,
+      "prefilter_expected": false,
+      "prefilter_actual": false,
+      "error": null,
+      "reasons": [
+        "Prefilter dropped non-vulnerability or marketing article."
+      ]
+    },
+    {
+      "case_id": "trap-mkt-02-webinar-invite",
+      "suite": "live",
+      "category": "marketing_trap",
+      "expected_routing": "drop",
+      "actual_routing": "drop",
+      "routing_match": true,
+      "expected_purls": [],
+      "actual_purls": [],
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 0,
+      "total_claims": 0,
+      "hallucination_escaped": false,
+      "probe_passed": 0,
+      "probe_total": 0,
+      "prefilter_expected": false,
+      "prefilter_actual": false,
+      "error": null,
+      "reasons": [
+        "Prefilter dropped non-vulnerability or marketing article."
+      ]
+    },
+    {
+      "case_id": "trap-mkt-03-hiring-careers",
+      "suite": "live",
+      "category": "marketing_trap",
+      "expected_routing": "drop",
+      "actual_routing": "drop",
+      "routing_match": true,
+      "expected_purls": [],
+      "actual_purls": [],
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 0,
+      "total_claims": 0,
+      "hallucination_escaped": false,
+      "probe_passed": 0,
+      "probe_total": 0,
+      "prefilter_expected": false,
+      "prefilter_actual": false,
+      "error": null,
+      "reasons": [
+        "Prefilter dropped non-vulnerability or marketing article."
+      ]
+    },
+    {
+      "case_id": "trap-mkt-04-customer-case-study",
+      "suite": "live",
+      "category": "marketing_trap",
+      "expected_routing": "drop",
+      "actual_routing": "drop",
+      "routing_match": true,
+      "expected_purls": [],
+      "actual_purls": [],
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 0,
+      "total_claims": 0,
+      "hallucination_escaped": false,
+      "probe_passed": 0,
+      "probe_total": 0,
+      "prefilter_expected": false,
+      "prefilter_actual": false,
+      "error": null,
+      "reasons": [
+        "Prefilter dropped non-vulnerability or marketing article."
+      ]
+    },
+    {
+      "case_id": "trap-mkt-05-conference-recap",
+      "suite": "live",
+      "category": "marketing_trap",
+      "expected_routing": "drop",
+      "actual_routing": "drop",
+      "routing_match": true,
+      "expected_purls": [],
+      "actual_purls": [],
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 0,
+      "total_claims": 0,
+      "hallucination_escaped": false,
+      "probe_passed": 0,
+      "probe_total": 0,
+      "prefilter_expected": false,
+      "prefilter_actual": false,
+      "error": null,
+      "reasons": [
+        "Prefilter dropped non-vulnerability or marketing article."
+      ]
+    },
+    {
+      "case_id": "trap-mkt-06-product-launch-v3",
+      "suite": "live",
+      "category": "marketing_trap",
+      "expected_routing": "drop",
+      "actual_routing": "drop",
+      "routing_match": true,
+      "expected_purls": [],
+      "actual_purls": [],
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 0,
+      "total_claims": 0,
+      "hallucination_escaped": false,
+      "probe_passed": 0,
+      "probe_total": 0,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "trap-mkt-07-feature-release-django",
+      "suite": "live",
+      "category": "marketing_trap",
+      "expected_routing": "drop",
+      "actual_routing": "drop",
+      "routing_match": true,
+      "expected_purls": [],
+      "actual_purls": [],
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 0,
+      "total_claims": 0,
+      "hallucination_escaped": false,
+      "probe_passed": 0,
+      "probe_total": 0,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    },
+    {
+      "case_id": "trap-mkt-08-retrospective-essay",
+      "suite": "live",
+      "category": "marketing_trap",
+      "expected_routing": "drop",
+      "actual_routing": "drop",
+      "routing_match": true,
+      "expected_purls": [],
+      "actual_purls": [],
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 0,
+      "total_claims": 0,
+      "hallucination_escaped": false,
+      "probe_passed": 0,
+      "probe_total": 0,
+      "prefilter_expected": false,
+      "prefilter_actual": false,
+      "error": null,
+      "reasons": [
+        "Prefilter dropped non-vulnerability or marketing article."
+      ]
+    },
+    {
+      "case_id": "trap-mkt-09-quarterly-report",
+      "suite": "live",
+      "category": "marketing_trap",
+      "expected_routing": "drop",
+      "actual_routing": "drop",
+      "routing_match": true,
+      "expected_purls": [],
+      "actual_purls": [],
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 0,
+      "total_claims": 0,
+      "hallucination_escaped": false,
+      "probe_passed": 0,
+      "probe_total": 0,
+      "prefilter_expected": false,
+      "prefilter_actual": false,
+      "error": null,
+      "reasons": [
+        "Prefilter dropped non-vulnerability or marketing article."
+      ]
+    },
+    {
+      "case_id": "trap-mkt-10-prompt-injection-spam",
+      "suite": "live",
+      "category": "marketing_trap",
+      "expected_routing": "drop",
+      "actual_routing": "drop",
+      "routing_match": true,
+      "expected_purls": [],
+      "actual_purls": [],
+      "true_positives": 0,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "grounded_claims": 0,
+      "total_claims": 0,
+      "hallucination_escaped": false,
+      "probe_passed": 0,
+      "probe_total": 0,
+      "prefilter_expected": true,
+      "prefilter_actual": true,
+      "error": null,
+      "reasons": []
+    }
+  ],
+  "executed_at": "2026-11-21T16:58:09.973286+00:00",
+  "dataset_sha256": "9fed3844b8c37a945e1a33890bcf32dbbba8214b9f55ce9b7364f4c954e9b93d"
+}

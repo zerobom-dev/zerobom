@@ -1,0 +1,55 @@
+name: "Propose Blog Source (sources.yaml)"
+description: Propose a Tier 1 or Tier 2 security research RSS/Atom/sitemap feed for zerobom watch.
+title: "[Source]: "
+labels: ["sources", "enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Propose a security research blog or advisory feed to add to `sources.yaml`.
+  - type: input
+    id: source_name
+    attributes:
+      label: Publisher / Blog Name
+      placeholder: e.g. Google Project Zero
+    validations:
+      required: true
+  - type: input
+    id: feed_url
+    attributes:
+      label: HTTPS Feed or Index URL
+      placeholder: https://example.org/feed.xml
+    validations:
+      required: true
+  - type: dropdown
+    id: feed_kind
+    attributes:
+      label: Feed Kind
+      options:
+        - rss
+        - sitemap
+        - html_index
+        - auto
+    validations:
+      required: true
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Recommended Credibility Tier
+      options:
+        - tier_1
+        - tier_2
+    validations:
+      required: true
+  - type: input
+    id: url_prefix
+    attributes:
+      label: Optional URL Prefix Filter (required for html_index)
+      placeholder: https://example.org/blog/
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Why should this feed be allowlisted?
+      description: Link 1-2 example pre-CVE or zero-day disclosures published here before NVD assignment.
+    validations:
+      required: true

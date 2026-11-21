@@ -1,0 +1,47 @@
+name: "Submit Benchmark Case"
+description: Add a fair-use historical pre-CVE advisory or marketing false-positive trap to benchmarks/.
+title: "[Benchmark]: "
+labels: ["benchmark", "enhancement"]
+body:
+  - type: dropdown
+    id: category
+    attributes:
+      label: Case Category
+      options:
+        - precve
+        - marketing_trap
+    validations:
+      required: true
+  - type: input
+    id: ecosystem_group
+    attributes:
+      label: Ecosystem Group
+      placeholder: e.g. pypi, npm, maven, go, deb, rpm, marketing
+    validations:
+      required: true
+  - type: input
+    id: advisory_url
+    attributes:
+      label: Canonical HTTPS Advisory URL
+      placeholder: https://example.org/advisories/post
+    validations:
+      required: true
+  - type: textarea
+    id: excerpt
+    attributes:
+      label: Fair-Use Article Excerpt & Version Bounds
+      description: Concise excerpt naming the affected package(s) and fixed/affected versions cleanly.
+    validations:
+      required: true
+  - type: input
+    id: expected_purls
+    attributes:
+      label: Expected Canonical PURLs (comma-separated, leave blank for marketing traps)
+      placeholder: pkg:pypi/requests
+  - type: textarea
+    id: probes
+    attributes:
+      label: Expected Vulnerable / Patched Version Probes
+      placeholder: "2.30.0 -> vulnerable=true\n2.31.0 -> vulnerable=false"
+    validations:
+      required: true

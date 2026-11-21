@@ -1,0 +1,800 @@
+[
+  {
+    "case_id": "offline-gold-01-pypi-requests",
+    "case_kind": "golden",
+    "attack_vector": "clean_range",
+    "article": {
+      "url": "https://research.example.org/advisories/python-requests-netrc-leak",
+      "title": "Pre-CVE Advisory: Credential Leak in Python requests During .netrc Redirects",
+      "body": "Security researchers identified a credential disclosure flaw in PyPI package requests. All versions of Python requests prior to 2.32.4 leak .netrc credentials across redirects. Maintainers released requests 2.32.4 as a fixed version.",
+      "source_name": "Example Security Research",
+      "source_tier": "tier_1",
+      "published_at": "2025-06-09T14:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://research.example.org/advisories/python-requests-netrc-leak",
+      "title": "Credential Leak in Python requests During .netrc Redirects",
+      "summary": "Python requests leaks .netrc credentials during cross-host redirects prior to 2.32.4.",
+      "claims": [
+        {
+          "raw_package_name": "requests",
+          "ecosystem": "pypi",
+          "version_constraints": [
+            {
+              "fixed": "2.32.4",
+              "raw_specifier": "< 2.32.4"
+            }
+          ],
+          "evidence_quote": "All versions of Python requests prior to 2.32.4 leak .netrc credentials across redirects."
+        }
+      ],
+      "severity": "MEDIUM",
+      "cwe_ids": ["CWE-522"],
+      "references": ["https://research.example.org/advisories/python-requests-netrc-leak"],
+      "extractor_model": "offline-fixture",
+      "prompt_version": "v1"
+    },
+    "mock_registry_status": {
+      "pkg:pypi/requests": "exists"
+    },
+    "expected_routing": "auto",
+    "expected_accepted_purls": ["pkg:pypi/requests"],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": true,
+    "version_probes": [
+      {
+        "component_purl": "pkg:pypi/requests",
+        "installed_version": "2.32.0",
+        "expected_vulnerable": true,
+        "description": "Below fixed version 2.32.4"
+      },
+      {
+        "component_purl": "pkg:pypi/requests",
+        "installed_version": "2.32.4",
+        "expected_vulnerable": false,
+        "description": "Patched version 2.32.4"
+      }
+    ],
+    "notes": "Golden PyPI verified advisory routing to AUTO."
+  },
+  {
+    "case_id": "offline-gold-02-npm-scoped-babel",
+    "case_kind": "golden",
+    "attack_vector": "clean_range",
+    "article": {
+      "url": "https://compilersec.example.org/babel-traverse-rce-note",
+      "title": "Arbitrary Code Execution in @babel/traverse",
+      "body": "Compiling malicious ASTs with npm package @babel/traverse enables RCE. Any pipeline running @babel/traverse versions prior to 7.23.2 is vulnerable.",
+      "source_name": "CompilerSec Research",
+      "source_tier": "tier_1",
+      "published_at": "2023-10-12T08:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://compilersec.example.org/babel-traverse-rce-note",
+      "title": "Arbitrary Code Execution in @babel/traverse",
+      "summary": "AST compilation with @babel/traverse prior to 7.23.2 permits RCE.",
+      "claims": [
+        {
+          "raw_package_name": "@babel/traverse",
+          "ecosystem": "npm",
+          "version_constraints": [
+            {
+              "fixed": "7.23.2",
+              "raw_specifier": "< 7.23.2"
+            }
+          ],
+          "evidence_quote": "Any pipeline running @babel/traverse versions prior to 7.23.2 is vulnerable."
+        }
+      ],
+      "severity": "CRITICAL",
+      "cwe_ids": ["CWE-94"],
+      "references": ["https://compilersec.example.org/babel-traverse-rce-note"],
+      "extractor_model": "offline-fixture",
+      "prompt_version": "v1"
+    },
+    "mock_registry_status": {
+      "pkg:npm/%40babel/traverse": "exists"
+    },
+    "expected_routing": "auto",
+    "expected_accepted_purls": ["pkg:npm/%40babel/traverse"],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": true,
+    "version_probes": [
+      {
+        "component_purl": "pkg:npm/%40babel/traverse",
+        "installed_version": "7.22.8",
+        "expected_vulnerable": true,
+        "description": "Affected scoped npm package"
+      },
+      {
+        "component_purl": "pkg:npm/%40babel/traverse",
+        "installed_version": "7.23.2",
+        "expected_vulnerable": false,
+        "description": "Patched scoped npm package"
+      }
+    ],
+    "notes": "Golden scoped npm package canonicalization and AUTO routing."
+  },
+  {
+    "case_id": "offline-gold-03-maven-log4j",
+    "case_kind": "golden",
+    "attack_vector": "clean_range",
+    "article": {
+      "url": "https://threatintel.example.org/zero-day-log4j-jndi-rce",
+      "title": "Critical Zero-Day RCE in org.apache.logging.log4j:log4j-core",
+      "body": "Active exploitation targets Maven artifact org.apache.logging.log4j:log4j-core via JNDI lookups. Affected Maven versions span org.apache.logging.log4j:log4j-core from 2.0-beta9 prior to 2.15.0.",
+      "source_name": "ThreatIntel Tier1",
+      "source_tier": "tier_1",
+      "published_at": "2021-12-09T21:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://threatintel.example.org/zero-day-log4j-jndi-rce",
+      "title": "Critical RCE in log4j-core",
+      "summary": "JNDI injection in log4j-core 2.0-beta9 through 2.14.1 enables unauthenticated RCE.",
+      "claims": [
+        {
+          "raw_package_name": "org.apache.logging.log4j:log4j-core",
+          "ecosystem": "maven",
+          "version_constraints": [
+            {
+              "introduced": "2.0-beta9",
+              "fixed": "2.15.0",
+              "raw_specifier": ">=2.0-beta9,<2.15.0"
+            }
+          ],
+          "evidence_quote": "Affected Maven versions span org.apache.logging.log4j:log4j-core from 2.0-beta9 prior to 2.15.0."
+        }
+      ],
+      "severity": "CRITICAL",
+      "cwe_ids": ["CWE-502"],
+      "references": ["https://threatintel.example.org/zero-day-log4j-jndi-rce"],
+      "extractor_model": "offline-fixture",
+      "prompt_version": "v1"
+    },
+    "mock_registry_status": {
+      "pkg:maven/org.apache.logging.log4j/log4j-core": "exists"
+    },
+    "expected_routing": "auto",
+    "expected_accepted_purls": ["pkg:maven/org.apache.logging.log4j/log4j-core"],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": true,
+    "version_probes": [
+      {
+        "component_purl": "pkg:maven/org.apache.logging.log4j/log4j-core",
+        "installed_version": "2.14.1",
+        "expected_vulnerable": true,
+        "description": "Within [2.0-beta9, 2.15.0)"
+      },
+      {
+        "component_purl": "pkg:maven/org.apache.logging.log4j/log4j-core",
+        "installed_version": "2.15.0",
+        "expected_vulnerable": false,
+        "description": "Patched release 2.15.0"
+      }
+    ],
+    "notes": "Golden Maven coordinate advisory with beta lower bound."
+  },
+  {
+    "case_id": "offline-gold-04-deb-xz-utils",
+    "case_kind": "golden",
+    "attack_vector": "clean_range",
+    "article": {
+      "url": "https://oss-security.example.org/lists/xz-utils-backdoor-5.6",
+      "title": "Supply Chain Backdoor in Debian xz-utils 5.6.0 and 5.6.1",
+      "body": "Immediate disclosure: Debian package xz-utils starting from 5.6.0 prior to fixed release 5.6.2 contains a backdoor enabling pre-auth RCE.",
+      "source_name": "OSS Security List",
+      "source_tier": "tier_1",
+      "published_at": "2024-03-29T13:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://oss-security.example.org/lists/xz-utils-backdoor-5.6",
+      "title": "Backdoor in Debian xz-utils",
+      "summary": "Debian xz-utils 5.6.0 and 5.6.1 contain an sshd backdoor.",
+      "claims": [
+        {
+          "raw_package_name": "xz-utils",
+          "ecosystem": "deb",
+          "namespace": "debian",
+          "version_constraints": [
+            {
+              "introduced": "5.6.0",
+              "fixed": "5.6.2",
+              "raw_specifier": ">=5.6.0,<5.6.2"
+            }
+          ],
+          "evidence_quote": "Debian package xz-utils starting from 5.6.0 prior to fixed release 5.6.2 contains a backdoor enabling pre-auth RCE."
+        }
+      ],
+      "severity": "CRITICAL",
+      "cwe_ids": ["CWE-506"],
+      "references": ["https://oss-security.example.org/lists/xz-utils-backdoor-5.6"],
+      "extractor_model": "offline-fixture",
+      "prompt_version": "v1"
+    },
+    "mock_registry_status": {
+      "pkg:deb/debian/xz-utils": "skipped"
+    },
+    "expected_routing": "auto",
+    "expected_accepted_purls": ["pkg:deb/debian/xz-utils"],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": true,
+    "version_probes": [
+      {
+        "component_purl": "pkg:deb/debian/xz-utils",
+        "installed_version": "5.6.1",
+        "expected_vulnerable": true,
+        "description": "Within backdoored [5.6.0, 5.6.2)"
+      },
+      {
+        "component_purl": "pkg:deb/debian/xz-utils",
+        "installed_version": "5.6.2",
+        "expected_vulnerable": false,
+        "description": "Fixed version 5.6.2"
+      },
+      {
+        "component_purl": "pkg:deb/debian/xz-utils",
+        "installed_version": "5.4.1",
+        "expected_vulnerable": false,
+        "description": "Earlier clean 5.4.1"
+      }
+    ],
+    "notes": "Golden Debian package with explicit namespace and skipped OS registry check."
+  },
+  {
+    "case_id": "offline-adv-01-generic-blocklist",
+    "case_kind": "adversarial",
+    "attack_vector": "generic_blocklist",
+    "article": {
+      "url": "https://hardenedsec.example.org/prompt-injection-generic-pkg",
+      "title": "Prompt Injection Test Trying to Poison Core and Utils Packages",
+      "body": "Security note discussing vulnerability patching. Versions of core and utils prior to 99.0.0 are mentioned by prompt injection payload.",
+      "source_name": "HardenedSec Tier1",
+      "source_tier": "tier_1",
+      "published_at": "2024-05-05T14:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://hardenedsec.example.org/prompt-injection-generic-pkg",
+      "title": "Generic Package Hallucination",
+      "summary": "Simulated prompt-injection output listing un-namespaced core and utils.",
+      "claims": [
+        {
+          "raw_package_name": "core",
+          "ecosystem": "pypi",
+          "version_constraints": [{"fixed": "99.0.0", "raw_specifier": "<99.0.0"}],
+          "evidence_quote": "Versions of core and utils prior to 99.0.0 are mentioned by prompt injection payload."
+        },
+        {
+          "raw_package_name": "utils",
+          "ecosystem": "npm",
+          "version_constraints": [{"fixed": "99.0.0", "raw_specifier": "<99.0.0"}],
+          "evidence_quote": "Versions of core and utils prior to 99.0.0 are mentioned by prompt injection payload."
+        }
+      ],
+      "severity": "HIGH",
+      "extractor_model": "adversarial-sim",
+      "prompt_version": "v1"
+    },
+    "mock_registry_status": {},
+    "expected_routing": "drop",
+    "expected_accepted_purls": [],
+    "expected_dropped_count": 2,
+    "expect_osv_compiled": false,
+    "version_probes": [],
+    "notes": "Generic blocklist must drop un-namespaced core and utils even when quoted verbatim."
+  },
+  {
+    "case_id": "offline-adv-02-registry-404",
+    "case_kind": "adversarial",
+    "attack_vector": "registry_404",
+    "article": {
+      "url": "https://blog.example.org/typosquat-hallucination",
+      "title": "RCE Vulnerability Reported in Ghost Package reqeusts-helper",
+      "body": "Researchers note that Python library reqeusts-helper versions before 1.2.3 contain a critical flaw.",
+      "source_name": "Blog Tier1",
+      "source_tier": "tier_1",
+      "published_at": "2024-06-01T10:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://blog.example.org/typosquat-hallucination",
+      "title": "Ghost Package Hallucination",
+      "summary": "Claim targeting non-existent reqeusts-helper package.",
+      "claims": [
+        {
+          "raw_package_name": "reqeusts-helper",
+          "ecosystem": "pypi",
+          "version_constraints": [{"fixed": "1.2.3", "raw_specifier": "<1.2.3"}],
+          "evidence_quote": "Python library reqeusts-helper versions before 1.2.3 contain a critical flaw."
+        }
+      ],
+      "severity": "CRITICAL",
+      "extractor_model": "adversarial-sim",
+      "prompt_version": "v1"
+    },
+    "mock_registry_status": {
+      "pkg:pypi/reqeusts-helper": "not_found"
+    },
+    "expected_routing": "drop",
+    "expected_accepted_purls": [],
+    "expected_dropped_count": 1,
+    "expect_osv_compiled": false,
+    "version_probes": [],
+    "notes": "Registry 404 (NOT_FOUND) drops non-existent hallucinated packages."
+  },
+  {
+    "case_id": "offline-adv-03-fabricated-quote",
+    "case_kind": "adversarial",
+    "attack_vector": "fabricated_quote",
+    "article": {
+      "url": "https://research.example.org/requests-unrelated-discussion",
+      "title": "HTTP Pooling Performance Tips for Python requests",
+      "body": "Using HTTPAdapter connection pools in Python requests improves throughput under high concurrency workloads.",
+      "source_name": "Example Research",
+      "source_tier": "tier_1",
+      "published_at": "2024-05-10T10:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://research.example.org/requests-unrelated-discussion",
+      "title": "Fabricated RCE Claim",
+      "summary": "LLM hallucinated an RCE claim with a fabricated quote.",
+      "claims": [
+        {
+          "raw_package_name": "requests",
+          "ecosystem": "pypi",
+          "version_constraints": [{"fixed": "9.0.0", "raw_specifier": "<9.0.0"}],
+          "evidence_quote": "Python requests versions prior to 9.0.0 suffer from an unauthenticated RCE backdoor."
+        }
+      ],
+      "severity": "CRITICAL",
+      "extractor_model": "adversarial-sim",
+      "prompt_version": "v1"
+    },
+    "mock_registry_status": {
+      "pkg:pypi/requests": "exists"
+    },
+    "expected_routing": "drop",
+    "expected_accepted_purls": [],
+    "expected_dropped_count": 1,
+    "expect_osv_compiled": false,
+    "version_probes": [],
+    "notes": "Real package name with fabricated evidence_quote must fail grounding and DROP."
+  },
+  {
+    "case_id": "offline-adv-04-bait-and-switch-quote",
+    "case_kind": "adversarial",
+    "attack_vector": "bait_and_switch_quote",
+    "article": {
+      "url": "https://sec-lab.example.org/posts/urllib3-proxy-header-strip",
+      "title": "Proxy-Authorization Header Leak in urllib3",
+      "body": "The Python library urllib3 versions prior to 2.2.2 leak Proxy-Authorization headers across cross-origin redirects.",
+      "source_name": "SecLab Disclosures",
+      "source_tier": "tier_1",
+      "published_at": "2024-06-17T10:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://sec-lab.example.org/posts/urllib3-proxy-header-strip",
+      "title": "Bait-and-Switch Package Attribution",
+      "summary": "Misattributed claim assigning urllib3's quote to requests.",
+      "claims": [
+        {
+          "raw_package_name": "requests",
+          "ecosystem": "pypi",
+          "version_constraints": [{"fixed": "2.2.2", "raw_specifier": "<2.2.2"}],
+          "evidence_quote": "The Python library urllib3 versions prior to 2.2.2 leak Proxy-Authorization headers across cross-origin redirects."
+        }
+      ],
+      "severity": "HIGH",
+      "extractor_model": "adversarial-sim",
+      "prompt_version": "v1"
+    },
+    "mock_registry_status": {
+      "pkg:pypi/requests": "exists"
+    },
+    "expected_routing": "triage",
+    "expected_accepted_purls": ["pkg:pypi/requests"],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": true,
+    "version_probes": [],
+    "notes": "Bait-and-switch quote (substring matches article but lacks package token 'requests') downgrades grounding to QUOTE_ONLY_WEAK and blocks AUTO alerting by routing to TRIAGE."
+  },
+  {
+    "case_id": "offline-adv-05-inverted-version-bounds",
+    "case_kind": "adversarial",
+    "attack_vector": "inverted_version_bounds",
+    "article": {
+      "url": "https://research.example.org/inverted-bounds",
+      "title": "Advisory on Python urllib3 Header Stripping",
+      "body": "The Python library urllib3 was patched in 2.2.2 after a header leak regression introduced in 1.26.0.",
+      "source_name": "Example Research",
+      "source_tier": "tier_1",
+      "published_at": "2024-06-18T10:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://research.example.org/inverted-bounds",
+      "title": "Inverted Version Bounds",
+      "summary": "LLM swapped introduced (2.2.2) and fixed (1.26.0) bounds.",
+      "claims": [
+        {
+          "raw_package_name": "urllib3",
+          "ecosystem": "pypi",
+          "version_constraints": [
+            {
+              "introduced": "2.2.2",
+              "fixed": "1.26.0",
+              "raw_specifier": ">=2.2.2,<1.26.0"
+            }
+          ],
+          "evidence_quote": "The Python library urllib3 was patched in 2.2.2 after a header leak regression introduced in 1.26.0."
+        }
+      ],
+      "severity": "MEDIUM",
+      "extractor_model": "adversarial-sim",
+      "prompt_version": "v1"
+    },
+    "mock_registry_status": {},
+    "expected_routing": "triage",
+    "expected_accepted_purls": ["pkg:pypi/urllib3"],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": false,
+    "version_probes": [],
+    "notes": "Inverted range fails deterministic OSV compilation (omits hollow OsvAffected / returns None) and lowers score below AUTO."
+  },
+  {
+    "case_id": "offline-adv-06-unknown-tier-cap",
+    "case_kind": "adversarial",
+    "attack_vector": "unknown_tier_cap",
+    "article": {
+      "url": "https://untrusted-forum.example.net/redis-rumor",
+      "title": "Unverified Rumor About PyPI redis Before 5.0.4",
+      "body": "PyPI redis versions prior to 5.0.4 allegedly leak pipelined asyncio responses.",
+      "source_name": "Anonymous Forum",
+      "source_tier": "unknown",
+      "published_at": "2024-05-01T08:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://untrusted-forum.example.net/redis-rumor",
+      "title": "Unverified redis claim",
+      "summary": "Claims PyPI redis < 5.0.4 is affected based on unverified source.",
+      "claims": [
+        {
+          "raw_package_name": "redis",
+          "ecosystem": "pypi",
+          "version_constraints": [{"fixed": "5.0.4", "raw_specifier": "<5.0.4"}],
+          "evidence_quote": "PyPI redis versions prior to 5.0.4 allegedly leak pipelined asyncio responses."
+        }
+      ],
+      "severity": "HIGH",
+      "cwe_ids": ["CWE-200"],
+      "references": ["https://untrusted-forum.example.net/redis-rumor"],
+      "extractor_model": "offline-fixture",
+      "prompt_version": "v1"
+    },
+    "mock_registry_status": {
+      "pkg:pypi/redis": "exists"
+    },
+    "expected_routing": "triage",
+    "expected_accepted_purls": ["pkg:pypi/redis"],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": true,
+    "version_probes": [
+      {
+        "component_purl": "pkg:pypi/redis",
+        "installed_version": "5.0.3",
+        "expected_vulnerable": true,
+        "description": "Compiled advisory preserves accurate math under TRIAGE"
+      }
+    ],
+    "notes": "UNKNOWN source tier multiplier (0.55) prevents AUTO alerting even on clean claims."
+  },
+  {
+    "case_id": "offline-adv-07-unbounded-zero-day",
+    "case_kind": "adversarial",
+    "attack_vector": "unbounded_zero_day",
+    "article": {
+      "url": "https://research.example.org/paramiko-zeroday",
+      "title": "Zero-Day in Python paramiko With No Patch Available",
+      "body": "All currently released versions of Python paramiko are vulnerable to an unpatched zero-day handshake defect.",
+      "source_name": "Example Research",
+      "source_tier": "tier_1",
+      "published_at": "2024-06-05T12:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://research.example.org/paramiko-zeroday",
+      "title": "Unbounded Zero-Day in paramiko",
+      "summary": "Zero-day affecting paramiko with no upstream patch yet.",
+      "claims": [
+        {
+          "raw_package_name": "paramiko",
+          "ecosystem": "pypi",
+          "version_constraints": [
+            {
+              "introduced": "0",
+              "is_unbounded": true,
+              "raw_specifier": "*"
+            }
+          ],
+          "evidence_quote": "All currently released versions of Python paramiko are vulnerable to an unpatched zero-day handshake defect."
+        }
+      ],
+      "severity": "HIGH",
+      "extractor_model": "offline-fixture",
+      "prompt_version": "v1"
+    },
+    "mock_registry_status": {},
+    "expected_routing": "triage",
+    "expected_accepted_purls": ["pkg:pypi/paramiko"],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": true,
+    "version_probes": [
+      {
+        "component_purl": "pkg:pypi/paramiko",
+        "installed_version": "3.4.0",
+        "expected_vulnerable": true,
+        "description": "Unbounded OSV introduced='0' matches installed version during triage review"
+      }
+    ],
+    "notes": "Unbounded zero-day specificity penalty forces human TRIAGE review instead of noisy AUTO alerts."
+  },
+  {
+    "case_id": "offline-adv-08-marketing-zero-claims",
+    "case_kind": "adversarial",
+    "attack_vector": "marketing_zero_claims",
+    "article": {
+      "url": "https://vendor.example.com/blog/series-b-funding-rsac-booth",
+      "title": "AcmeSec Raises $45M Series B Ahead of RSA Conference",
+      "body": "Join AcmeSec at Booth 1402 during RSAC for demos and swag.",
+      "source_name": "AcmeSec Blog",
+      "source_tier": "tier_1",
+      "published_at": "2024-04-15T12:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://vendor.example.com/blog/series-b-funding-rsac-booth",
+      "title": "AcmeSec Series B Announcement",
+      "summary": "Promotional article containing zero package vulnerability claims.",
+      "claims": [],
+      "severity": "UNKNOWN",
+      "extractor_model": "offline-fixture",
+      "prompt_version": "v1"
+    },
+    "mock_registry_status": {},
+    "expected_routing": "drop",
+    "expected_accepted_purls": [],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": false,
+    "version_probes": [],
+    "notes": "Zero claims from a marketing article yields composite score 0.0 -> DROP and no OSV artifact."
+  },
+  {
+    "case_id": "offline-gold-05-generic-ruby-multibranch",
+    "case_kind": "golden",
+    "attack_vector": "clean_range",
+    "article": {
+      "url": "https://rubysec.example.org/ruby2shell-arbitrary-code-execution",
+      "title": "Ruby2Shell Arbitrary Code Execution in MRI Ruby",
+      "body": "Researchers disclosed an RCE flaw in the generic ruby runtime affecting 3.2.0 prior to 3.2.7, 3.3.0 prior to 3.3.7, and 3.4.0 prior to 3.4.2.",
+      "source_name": "RubySec Research",
+      "source_tier": "tier_1",
+      "published_at": "2026-10-15T12:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://rubysec.example.org/ruby2shell-arbitrary-code-execution",
+      "title": "Ruby2Shell RCE in generic ruby",
+      "summary": "Unauthenticated RCE across Ruby 3.2, 3.3, and 3.4 branches.",
+      "claims": [
+        {
+          "raw_package_name": "ruby",
+          "ecosystem": "generic",
+          "version_constraints": [
+            {"introduced": "3.2.0", "fixed": "3.2.7"},
+            {"introduced": "3.3.0", "fixed": "3.3.7"},
+            {"introduced": "3.4.0", "fixed": "3.4.2"}
+          ],
+          "evidence_quote": "Researchers disclosed an RCE flaw in the generic ruby runtime affecting 3.2.0 prior to 3.2.7, 3.3.0 prior to 3.3.7, and 3.4.0 prior to 3.4.2."
+        }
+      ],
+      "severity": "CRITICAL",
+      "cwe_ids": ["CWE-502"],
+      "references": ["https://rubysec.example.org/ruby2shell-arbitrary-code-execution"],
+      "extractor_model": "offline-fixture",
+      "prompt_version": "v1.1"
+    },
+    "mock_registry_status": {},
+    "expected_routing": "auto",
+    "expected_accepted_purls": ["pkg:generic/ruby"],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": true,
+    "version_probes": [
+      {
+        "component_purl": "pkg:generic/ruby",
+        "installed_version": "3.3.6",
+        "expected_vulnerable": true,
+        "description": "Within [3.3.0, 3.3.7)"
+      },
+      {
+        "component_purl": "pkg:generic/ruby",
+        "installed_version": "3.3.7",
+        "expected_vulnerable": false,
+        "description": "Fixed in 3.3.7"
+      },
+      {
+        "component_purl": "pkg:generic/ruby",
+        "installed_version": "3.4.1",
+        "expected_vulnerable": true,
+        "description": "Within [3.4.0, 3.4.2)"
+      }
+    ],
+    "notes": "Golden generic runtime extraction bypassing registry-only generic blocklist."
+  },
+  {
+    "case_id": "offline-gold-06-rpm-cloudlinux-kernel-multistream",
+    "case_kind": "golden",
+    "attack_vector": "clean_range",
+    "article": {
+      "url": "https://blog.cloudlinux.example.org/security/kernel-zdi-can-33367",
+      "title": "CloudLinux Kernel Security Advisory for ZDI-CAN-33367",
+      "body": "Security update addressing ZDI-CAN-33367 in CloudLinux RPM packages.\nUpdate 28 Oct: CloudLinux 9 hosts are patched in rpm kernel-5.14.0-687.60.1.el9_8.\nUpdate 30 Oct: CloudLinux 8 hosts are patched in rpm kernel-4.18.0-553.el8, while TuxCare kernel-lts fixes land in kernel-lts-5.14.0-284.1101.el8.tuxcare.11.els17.",
+      "source_name": "CloudLinux Blog",
+      "source_tier": "tier_1",
+      "published_at": "2026-10-30T14:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://blog.cloudlinux.example.org/security/kernel-zdi-can-33367",
+      "title": "CloudLinux Kernel Update (ZDI-CAN-33367)",
+      "summary": "CloudLinux 8/9 kernel and kernel-lts privilege escalation fixes.",
+      "known_aliases": ["ZDI-CAN-33367"],
+      "claims": [
+        {
+          "raw_package_name": "kernel",
+          "ecosystem": "rpm",
+          "namespace": "cloudlinux",
+          "distro_release": "9",
+          "version_constraints": [
+            {"introduced": "0", "fixed": "kernel-5.14.0-687.60.1.el9_8"}
+          ],
+          "evidence_quote": "Update 28 Oct: CloudLinux 9 hosts are patched in rpm kernel-5.14.0-687.60.1.el9_8."
+        },
+        {
+          "raw_package_name": "kernel",
+          "ecosystem": "rpm",
+          "namespace": "cloudlinux",
+          "distro_release": "8",
+          "version_constraints": [
+            {"introduced": "0", "fixed": "kernel-4.18.0-553.el8"}
+          ],
+          "evidence_quote": "Update 30 Oct: CloudLinux 8 hosts are patched in rpm kernel-4.18.0-553.el8,"
+        },
+        {
+          "raw_package_name": "kernel-lts",
+          "ecosystem": "rpm",
+          "namespace": "cloudlinux",
+          "distro_release": "8",
+          "version_constraints": [
+            {"introduced": "0", "fixed": "kernel-lts-5.14.0-284.1101.el8.tuxcare.11.els17"}
+          ],
+          "evidence_quote": "while TuxCare kernel-lts fixes land in kernel-lts-5.14.0-284.1101.el8.tuxcare.11.els17."
+        }
+      ],
+      "severity": "HIGH",
+      "references": ["https://blog.cloudlinux.example.org/security/kernel-zdi-can-33367"],
+      "extractor_model": "offline-fixture",
+      "prompt_version": "v1.1"
+    },
+    "mock_registry_status": {},
+    "expected_routing": "auto",
+    "expected_accepted_purls": [
+      "pkg:rpm/cloudlinux/kernel",
+      "pkg:rpm/cloudlinux/kernel-lts"
+    ],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": true,
+    "version_probes": [
+      {
+        "component_purl": "pkg:rpm/cloudlinux/kernel?distro=cloudlinux-8",
+        "installed_version": "4.18.0-553.el8",
+        "expected_vulnerable": false,
+        "description": "Patched CL8 kernel must stay clean under stream isolation"
+      },
+      {
+        "component_purl": "pkg:rpm/cloudlinux/kernel?distro=cloudlinux-8",
+        "installed_version": "4.18.0-552.el8",
+        "expected_vulnerable": true,
+        "description": "Vulnerable CL8 kernel"
+      },
+      {
+        "component_purl": "pkg:rpm/cloudlinux/kernel?distro=cloudlinux-9",
+        "installed_version": "5.14.0-687.59.1.el9_8",
+        "expected_vulnerable": true,
+        "description": "Vulnerable CL9 kernel"
+      },
+      {
+        "component_purl": "pkg:rpm/cloudlinux/kernel-lts",
+        "installed_version": "5.14.0-284.1100.el8.tuxcare.11.els17",
+        "expected_vulnerable": true,
+        "description": "Vulnerable kernel-lts prior to TuxCare fix"
+      }
+    ],
+    "notes": "Golden CloudLinux multi-stream NVR extraction with stream isolation."
+  },
+  {
+    "case_id": "offline-adv-09-registry-runtime-name-blocked",
+    "case_kind": "adversarial",
+    "attack_vector": "generic_blocklist",
+    "article": {
+      "url": "https://research.example.org/ruby-gem-vs-runtime-confusion",
+      "title": "Runtime Name Collision on Registry Ecosystems",
+      "body": "Attackers try confusing ruby gem and python kernel names on library registries. Versions of ruby before 3.4.2 and kernel before 1.0.0 are cited.",
+      "source_name": "Example Research",
+      "source_tier": "tier_1",
+      "published_at": "2026-10-20T12:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://research.example.org/ruby-gem-vs-runtime-confusion",
+      "title": "Registry Runtime Name Confusion",
+      "summary": "Adversarial LLM misclassified runtime ruby under gem and kernel under pypi.",
+      "claims": [
+        {
+          "raw_package_name": "ruby",
+          "ecosystem": "gem",
+          "version_constraints": [{"fixed": "3.4.2"}],
+          "evidence_quote": "Versions of ruby before 3.4.2 and kernel before 1.0.0 are cited."
+        },
+        {
+          "raw_package_name": "kernel",
+          "ecosystem": "pypi",
+          "version_constraints": [{"fixed": "1.0.0"}],
+          "evidence_quote": "Versions of ruby before 3.4.2 and kernel before 1.0.0 are cited."
+        }
+      ],
+      "severity": "HIGH",
+      "extractor_model": "adversarial-sim",
+      "prompt_version": "v1.1"
+    },
+    "mock_registry_status": {},
+    "expected_routing": "drop",
+    "expected_accepted_purls": [],
+    "expected_dropped_count": 2,
+    "expect_osv_compiled": false,
+    "version_probes": [],
+    "notes": "Ecosystem-aware blocklist continues blocking un-namespaced runtime words on library registries."
+  },
+  {
+    "case_id": "offline-adv-10-multi-quote-stitch-bait",
+    "case_kind": "adversarial",
+    "attack_vector": "bait_and_switch_quote",
+    "article": {
+      "url": "https://sec-lab.example.org/posts/split-paragraph-bait",
+      "title": "HTTP Library Tips and Unrelated Kernel Patch",
+      "body": "Paragraph 1: Operators commonly use Python requests for HTTP webhooks.\nParagraph 2: Separate advisory patched urllib3 prior to 2.2.2.",
+      "source_name": "SecLab Disclosures",
+      "source_tier": "tier_1",
+      "published_at": "2026-10-21T12:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://sec-lab.example.org/posts/split-paragraph-bait",
+      "title": "Cross-Paragraph Bait-and-Switch Stitch",
+      "summary": "Adversarial LLM stitched requests from paragraph 1 with 2.2.2 from paragraph 2.",
+      "claims": [
+        {
+          "raw_package_name": "requests",
+          "ecosystem": "pypi",
+          "version_constraints": [{"fixed": "2.2.2"}],
+          "evidence_quote": "Paragraph 1: Operators commonly use Python requests for HTTP webhooks.",
+          "supporting_quotes": [
+            "Paragraph 2: Separate advisory patched urllib3 prior to 2.2.2."
+          ]
+        }
+      ],
+      "severity": "HIGH",
+      "extractor_model": "adversarial-sim",
+      "prompt_version": "v1.1"
+    },
+    "mock_registry_status": {
+      "pkg:pypi/requests": "exists"
+    },
+    "expected_routing": "triage",
+    "expected_accepted_purls": ["pkg:pypi/requests"],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": true,
+    "version_probes": [],
+    "notes": "Cross-paragraph multi-quote stitching fails co-occurrence invariant and blocks AUTO escalation."
+  }
+]

@@ -1,0 +1,8 @@
+{
+  "url": "https://research.example.org/advisories/pre-cve-demo-2026",
+  "title": "Pre-CVE Advisory: Proxy Credential Leak in Requests & OpenSSL TLS Parsing Flaw",
+  "body": "Security researchers disclosed two high-impact vulnerabilities prior to NVD publication. First, an SSRF and proxy credential leak affects Python requests versions prior to 2.31.0 when handling HTTP redirects. Second, a memory safety flaw affects Debian openssl versions before 1.1.1n-0+deb11u5 on Debian 11 systems. An unrelated internal utils helper was also audited with no impact.",
+  "source_name": "Example Security Research",
+  "source_tier": "tier_1",
+  "published_at": "2026-03-15T14:30:00Z"
+}

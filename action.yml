@@ -1,0 +1,394 @@
+name: "zerobom Pre-CVE Security Scanner"
+description: "Hunt pre-CVE / CVE-less vulnerabilities against CycloneDX, SPDX, and cloud SBOM inventories with deterministic verification and credibility-gated alerting."
+author: "zerobom Contributors"
+
+branding:
+  icon: "shield"
+  color: "green"
+
+inputs:
+  mode:
+    description: "Execution mode: watch, scan, or check."
+    required: false
+    default: "watch"
+  sbom:
+    description: "Path to CycloneDX or SPDX JSON SBOM file or directory."
+    required: false
+    default: ""
+  backend:
+    description: "Registered inventory backend name (local_sbom, dependency_track, oci_sbom, k8s_sbom, etc.)."
+    required: false
+    default: "local_sbom"
+  backend-config:
+    description: "Optional YAML or JSON configuration file for the inventory backend."
+    required: false
+    default: ""
+  backend-opts:
+    description: "Optional newline-separated KEY=VALUE backend options."
+    required: false
+    default: ""
+  extras:
+    description: "Optional zerobom extras for uvx (e.g. aws, gcp, azure, or aws,gcp)."
+    required: false
+    default: ""
+  feeds:
+    description: "Path to sources.yaml RSS/Atom allowlist for watch mode."
+    required: false
+    default: "sources.yaml"
+  osv:
+    description: "Path to OSV JSON advisory file or directory for scan mode."
+    required: false
+    default: ""
+  url:
+    description: "Target security blog or advisory URL for check mode."
+    required: false
+    default: ""
+  verify-registry:
+    description: "Verify extracted package existence against upstream registries ('true' or 'false')."
+    required: false
+    default: "false"
+  include-triage:
+    description: "Also query inventory for TRIAGE advisories ('true' or 'false')."
+    required: false
+    default: "false"
+  state-db:
+    description: "SQLite state database path for feed and article deduplication."
+    required: false
+    default: ".zerobom/state/state.sqlite"
+  triage-db:
+    description: "SQLite triage queue database path for human-in-the-loop tracking."
+    required: false
+    default: ".zerobom/state/triage.sqlite"
+  json-out:
+    description: "File path to write zerobom structured JSON output."
+    required: false
+    default: ".zerobom-reports/report.json"
+  sarif-out:
+    description: "File path to write SARIF 2.1.0 output."
+    required: false
+    default: ".zerobom-reports/report.sarif"
+  upload-sarif:
+    description: "Upload generated SARIF report to GitHub Code Scanning ('true' or 'false')."
+    required: false
+    default: "true"
+  sarif-category:
+    description: "SARIF category identifier passed to GitHub Code Scanning."
+    required: false
+    default: "zerobom"
+  create-github-issues:
+    description: "Create or update idempotent GitHub Issues for verified hits ('true' or 'false')."
+    required: false
+    default: "false"
+  github-repo:
+    description: "Target GitHub repository in owner/name format (defaults to current repository)."
+    required: false
+    default: ""
+  github-token:
+    description: "GitHub token with security-events: write and/or issues: write permissions."
+    required: false
+    default: ""
+  github-issue-triage:
+    description: "Also create GitHub review issues for pending TRIAGE advisories ('true' or 'false')."
+    required: false
+    default: "false"
+  webhook-url:
+    description: "Optional generic HTTPS webhook alert URL."
+    required: false
+    default: ""
+  webhook-secret:
+    description: "Optional HMAC-SHA256 webhook signing secret."
+    required: false
+    default: ""
+  slack-webhook-url:
+    description: "Optional Slack Incoming Webhook URL."
+    required: false
+    default: ""
+  fail-on-hits:
+    description: "Fail the action with exit code 1 when vulnerable inventory hits are detected ('true' or 'false')."
+    required: false
+    default: "true"
+  zerobom-version:
+    description: "Pinned zerobom package version for uvx, or 'local' to run from current checkout."
+    required: false
+    default: "0.1.0"
+  cache-state:
+    description: "Cache SQLite state under .zerobom across workflow runs ('true' or 'false')."
+    required: false
+    default: "true"
+  llm-base-url:
+    description: "Optional OpenAI-compatible LLM API base URL (maps to ZEROBOM_LLM_BASE_URL)."
+    required: false
+    default: ""
+  llm-model:
+    description: "Optional LLM model identifier (maps to ZEROBOM_LLM_MODEL)."
+    required: false
+    default: ""
+  llm-api-key:
+    description: "Optional LLM API key (maps to ZEROBOM_LLM_API_KEY)."
+    required: false
+    default: ""
+
+outputs:
+  exit-code:
+    description: "Exit code returned by zerobom (0=clean, 1=vulnerable hits, 2=error)."
+    value: ${{ steps.run-zerobom.outputs.exit-code }}
+  vulnerable-hits:
+    description: "Number of matched vulnerable inventory components."
+    value: ${{ steps.run-zerobom.outputs.vulnerable-hits }}
+  total-analyzed:
+    description: "Total articles or advisories analyzed."
+    value: ${{ steps.run-zerobom.outputs.total-analyzed }}
+  json-path:
+    description: "Path to the generated zerobom JSON report."
+    value: ${{ steps.run-zerobom.outputs.json-path }}
+  sarif-path:
+    description: "Path to the generated SARIF 2.1.0 report."
+    value: ${{ steps.run-zerobom.outputs.sarif-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up uv
+      uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      with:
+        enable-cache: true
+
+    - name: Restore zerobom SQLite state
+      if: inputs.cache-state == 'true'
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: .zerobom/state
+        key: zerobom-state-${{ github.repository }}-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
+        restore-keys: |
+          zerobom-state-${{ github.repository }}-${{ runner.os }}-${{ github.ref_name }}-
+          zerobom-state-${{ github.repository }}-${{ runner.os }}-
+
+    - name: Run zerobom
+      id: run-zerobom
+      shell: bash
+      env:
+        ZB_MODE: ${{ inputs.mode }}
+        ZB_SBOM: ${{ inputs.sbom }}
+        ZB_BACKEND: ${{ inputs.backend }}
+        ZB_BACKEND_CONFIG: ${{ inputs.backend-config }}
+        ZB_BACKEND_OPTS: ${{ inputs.backend-opts }}
+        ZB_EXTRAS: ${{ inputs.extras }}
+        ZB_FEEDS: ${{ inputs.feeds }}
+        ZB_ACTION_PATH: ${{ github.action_path }}
+        ZB_OSV: ${{ inputs.osv }}
+        ZB_URL: ${{ inputs.url }}
+        ZB_VERIFY_REGISTRY: ${{ inputs.verify-registry }}
+        ZB_INCLUDE_TRIAGE: ${{ inputs.include-triage }}
+        ZB_STATE_DB: ${{ inputs.state-db }}
+        ZB_TRIAGE_DB: ${{ inputs.triage-db }}
+        ZB_JSON_OUT: ${{ inputs.json-out }}
+        ZB_SARIF_OUT: ${{ inputs.sarif-out }}
+        ZB_CREATE_ISSUES: ${{ inputs.create-github-issues }}
+        ZB_GITHUB_REPO: ${{ inputs.github-repo }}
+        ZB_DEFAULT_REPO: ${{ github.repository }}
+        ZB_GITHUB_API_URL: ${{ github.api_url }}
+        ZB_GITHUB_TOKEN: ${{ inputs.github-token != '' && inputs.github-token || github.token }}
+        ZB_GITHUB_ISSUE_TRIAGE: ${{ inputs.github-issue-triage }}
+        ZB_WEBHOOK_URL: ${{ inputs.webhook-url }}
+        ZB_WEBHOOK_SECRET: ${{ inputs.webhook-secret }}
+        ZB_SLACK_WEBHOOK_URL: ${{ inputs.slack-webhook-url }}
+        ZB_FAIL_ON_HITS: ${{ inputs.fail-on-hits }}
+        ZB_VERSION: ${{ inputs.zerobom-version }}
+        ZB_LLM_BASE_URL: ${{ inputs.llm-base-url }}
+        ZB_LLM_MODEL: ${{ inputs.llm-model }}
+        ZB_LLM_API_KEY: ${{ inputs.llm-api-key }}
+      run: |
+        set -uo pipefail
+
+        mkdir -p .zerobom/state .zerobom-reports
+        if [ -n "$ZB_JSON_OUT" ]; then
+          rm -f "$ZB_JSON_OUT"
+        fi
+        if [ -n "$ZB_SARIF_OUT" ]; then
+          rm -f "$ZB_SARIF_OUT"
+        fi
+
+        if [ "$ZB_VERSION" = "local" ]; then
+          CMD=(uv run zerobom)
+        else
+          if ! [[ "$ZB_VERSION" =~ ^[A-Za-z0-9._+-]+$ ]]; then
+            echo "::error::Invalid zerobom-version specifier."
+            exit 2
+          fi
+          if [ -n "$ZB_EXTRAS" ]; then
+            if ! [[ "$ZB_EXTRAS" =~ ^[a-z0-9,_-]+$ ]]; then
+              echo "::error::Invalid zerobom extras specifier."
+              exit 2
+            fi
+            CMD=(uvx "zerobom[${ZB_EXTRAS}]==${ZB_VERSION}")
+          else
+            CMD=(uvx "zerobom==${ZB_VERSION}")
+          fi
+        fi
+
+        case "$ZB_MODE" in
+          watch)
+            FEED_PATH="$ZB_FEEDS"
+            if [ "$FEED_PATH" = "sources.yaml" ] && [ ! -f "$FEED_PATH" ] && [ -n "$ZB_ACTION_PATH" ] && [ -f "${ZB_ACTION_PATH}/sources.yaml" ]; then
+              FEED_PATH="${ZB_ACTION_PATH}/sources.yaml"
+            fi
+            CMD+=(watch --feeds "$FEED_PATH")
+            if [ -n "$ZB_STATE_DB" ]; then
+              CMD+=(--state-db "$ZB_STATE_DB")
+            fi
+            if [ -n "$ZB_TRIAGE_DB" ]; then
+              CMD+=(--triage-db "$ZB_TRIAGE_DB")
+            fi
+            if [ "$ZB_VERIFY_REGISTRY" = "true" ]; then
+              CMD+=(--verify-registry)
+            fi
+            if [ "$ZB_INCLUDE_TRIAGE" = "true" ]; then
+              CMD+=(--include-triage)
+            fi
+            ;;
+          scan)
+            if [ -z "$ZB_OSV" ]; then
+              echo "::error::Input 'osv' is required when mode is 'scan'."
+              exit 2
+            fi
+            CMD+=(scan --osv "$ZB_OSV")
+            ;;
+          check)
+            if [ -z "$ZB_URL" ]; then
+              echo "::error::Input 'url' is required when mode is 'check'."
+              exit 2
+            fi
+            CMD+=(check --url "$ZB_URL")
+            if [ -n "$ZB_TRIAGE_DB" ]; then
+              CMD+=(--triage-db "$ZB_TRIAGE_DB")
+            fi
+            if [ "$ZB_VERIFY_REGISTRY" = "true" ]; then
+              CMD+=(--verify-registry)
+            fi
+            if [ "$ZB_INCLUDE_TRIAGE" = "true" ]; then
+              CMD+=(--include-triage)
+            fi
+            ;;
+          *)
+            echo "::error::Unsupported mode '$ZB_MODE' (expected watch, scan, or check)."
+            exit 2
+            ;;
+        esac
+
+        if [ -n "$ZB_SBOM" ]; then
+          CMD+=(--sbom "$ZB_SBOM")
+        fi
+        if [ -n "$ZB_BACKEND" ]; then
+          CMD+=(--backend "$ZB_BACKEND")
+        fi
+        if [ -n "$ZB_BACKEND_CONFIG" ]; then
+          CMD+=(--backend-config "$ZB_BACKEND_CONFIG")
+        fi
+        if [ -n "$ZB_BACKEND_OPTS" ]; then
+          while IFS= read -r opt_line; do
+            opt_line="${opt_line%$'\r'}"
+            if [ -n "$opt_line" ]; then
+              CMD+=(--backend-opt "$opt_line")
+            fi
+          done <<< "$ZB_BACKEND_OPTS"
+        fi
+        if [ -n "$ZB_JSON_OUT" ]; then
+          CMD+=(--json-out "$ZB_JSON_OUT")
+        fi
+        if [ -n "$ZB_SARIF_OUT" ]; then
+          CMD+=(--sarif-out "$ZB_SARIF_OUT")
+        fi
+        if [ "$ZB_FAIL_ON_HITS" != "true" ]; then
+          CMD+=(--no-fail-on-hits)
+        fi
+
+        if [ "$ZB_CREATE_ISSUES" = "true" ]; then
+          TARGET_REPO="${ZB_GITHUB_REPO:-$ZB_DEFAULT_REPO}"
+          CMD+=(--github-repo "$TARGET_REPO")
+          if [ -n "$ZB_GITHUB_API_URL" ]; then
+            export ZEROBOM_GITHUB_API_URL="$ZB_GITHUB_API_URL"
+          fi
+          if [ -n "$ZB_GITHUB_TOKEN" ]; then
+            export ZEROBOM_GITHUB_TOKEN="$ZB_GITHUB_TOKEN"
+          fi
+          if [ "$ZB_GITHUB_ISSUE_TRIAGE" = "true" ]; then
+            CMD+=(--github-issue-triage)
+          fi
+        fi
+
+        # Export alert & LLM credentials via environment to avoid exposing secrets in argv.
+        if [ -n "$ZB_WEBHOOK_URL" ]; then
+          export ZEROBOM_WEBHOOK_URL="$ZB_WEBHOOK_URL"
+        fi
+        if [ -n "$ZB_WEBHOOK_SECRET" ]; then
+          export ZEROBOM_WEBHOOK_SECRET="$ZB_WEBHOOK_SECRET"
+        fi
+        if [ -n "$ZB_SLACK_WEBHOOK_URL" ]; then
+          export ZEROBOM_SLACK_WEBHOOK_URL="$ZB_SLACK_WEBHOOK_URL"
+        fi
+        if [ -n "$ZB_LLM_BASE_URL" ]; then
+          export ZEROBOM_LLM_BASE_URL="$ZB_LLM_BASE_URL"
+        fi
+        if [ -n "$ZB_LLM_MODEL" ]; then
+          export ZEROBOM_LLM_MODEL="$ZB_LLM_MODEL"
+        fi
+        if [ -n "$ZB_LLM_API_KEY" ]; then
+          export ZEROBOM_LLM_API_KEY="$ZB_LLM_API_KEY"
+        fi
+
+        ZB_EXIT=0
+        "${CMD[@]}" || ZB_EXIT=$?
+
+        VULN_HITS=0
+        TOTAL_ANALYZED=0
+        if [ -n "$ZB_JSON_OUT" ] && [ -f "$ZB_JSON_OUT" ]; then
+          METRICS="$(
+            ZB_REPORT_PATH="$ZB_JSON_OUT" python3 - <<'PY'
+        import json, os, pathlib
+        data = json.loads(pathlib.Path(os.environ["ZB_REPORT_PATH"]).read_text(encoding="utf-8"))
+        summary = data.get("summary", {})
+        print(f"{int(summary.get('vulnerable_hits', 0))} {int(summary.get('total_analyzed', 0))}")
+        PY
+          )" || METRICS="0 0"
+          read -r VULN_HITS TOTAL_ANALYZED <<< "$METRICS"
+        fi
+
+        {
+          echo "exit-code=${ZB_EXIT}"
+          echo "vulnerable-hits=${VULN_HITS}"
+          echo "total-analyzed=${TOTAL_ANALYZED}"
+          if [ -n "$ZB_JSON_OUT" ] && [ -f "$ZB_JSON_OUT" ]; then
+            echo "json-path=${ZB_JSON_OUT}"
+          else
+            echo "json-path="
+          fi
+          if [ -n "$ZB_SARIF_OUT" ] && [ -f "$ZB_SARIF_OUT" ]; then
+            echo "sarif-path=${ZB_SARIF_OUT}"
+          else
+            echo "sarif-path="
+          fi
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Upload SARIF report to GitHub Code Scanning
+      if: inputs.upload-sarif == 'true' && steps.run-zerobom.outputs.sarif-path != ''
+      uses: github/codeql-action/upload-sarif@d2aacf54c2fbc910db8d7ec338fdb54ea48c692d # v3
+      with:
+        sarif_file: ${{ steps.run-zerobom.outputs.sarif-path }}
+        category: ${{ inputs.sarif-category }}
+        token: ${{ inputs.github-token != '' && inputs.github-token || github.token }}
+
+    - name: Save zerobom SQLite state
+      if: ${{ !cancelled() && inputs.cache-state == 'true' }}
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: .zerobom/state
+        key: zerobom-state-${{ github.repository }}-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
+
+    - name: Enforce exit status gate
+      if: steps.run-zerobom.outputs.exit-code != '0'
+      shell: bash
+      env:
+        ZB_EXIT_CODE: ${{ steps.run-zerobom.outputs.exit-code }}
+      run: |
+        echo "::error::zerobom exited with status ${ZB_EXIT_CODE}."
+        exit "${ZB_EXIT_CODE}"

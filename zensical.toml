@@ -1,0 +1,100 @@
+[project]
+site_name = "zerobom"
+site_description = "Deterministic pre-CVE security advisory verification and OSV compilation engine."
+site_author = "zerobom Contributors"
+site_url = "https://zerobom.dev/"
+repo_url = "https://github.com/zerobom-dev/zerobom"
+repo_name = "zerobom-dev/zerobom"
+edit_uri = "edit/main/docs/"
+docs_dir = "docs"
+site_dir = "site"
+copyright = "Copyright &copy; 2026 zerobom Contributors &mdash; Apache-2.0"
+
+exclude_docs = """
+ROADMAP.md
+"""
+
+nav = [
+    { "Home" = "index.md" },
+    { "Getting Started" = "getting-started.md" },
+    { "Architecture & Security" = "architecture.md" },
+    { "Inventory Backends" = "backends.md" },
+    { "Plugin Authoring Guide" = "PLUGIN_AUTHORING.md" },
+    { "Alerting & Human Triage" = "alerting-and-triage.md" },
+    { "GitHub Action & CI" = "github-action.md" },
+    { "Benchmarks" = "benchmarks.md" },
+    { "API Reference" = [
+        { "Models & Contracts" = "api/models.md" },
+        { "Pipeline Orchestration" = "api/pipeline.md" },
+        { "Deterministic Verification" = "api/verify.md" },
+        { "Ingestion & State" = "api/ingest.md" },
+        { "LLM Extraction" = "api/extract.md" },
+        { "Inventory Backends" = "api/backends.md" },
+        { "Outputs & Alerting" = "api/outputs.md" },
+        { "Human Triage Queue & Worker" = "api/triage.md" },
+    ]},
+]
+
+[project.theme]
+variant = "modern"
+language = "en"
+features = [
+    "navigation.instant",
+    "navigation.instant.prefetch",
+    "navigation.tracking",
+    "navigation.sections",
+    "navigation.top",
+    "content.code.copy",
+    "content.action.edit",
+    "content.action.view",
+    "search.highlight",
+    "search.suggest",
+]
+
+[project.theme.icon]
+repo = "fontawesome/brands/github"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "teal"
+accent = "green"
+
+[project.theme.palette.toggle]
+icon = "lucide/moon"
+name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "teal"
+accent = "green"
+
+[project.theme.palette.toggle]
+icon = "lucide/sun"
+name = "Switch to light mode"
+
+[project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+    { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+
+[project.plugins.mkdocstrings]
+default_handler = "python"
+
+[project.plugins.mkdocstrings.handlers.python]
+paths = [
+    "src",
+    "plugins/zerobom-aws/src",
+    "plugins/zerobom-gcp/src",
+    "plugins/zerobom-azure/src",
+]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "google"
+docstring_section_style = "table"
+merge_init_into_class = true
+show_root_heading = true
+show_root_full_path = false
+show_source = true
+filters = ["!^_"]

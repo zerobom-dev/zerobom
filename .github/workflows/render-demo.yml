@@ -1,0 +1,37 @@
+name: Render Terminal Demo GIF
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    name: Render VHS Demo GIF
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up uv and Python 3.12
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install local zerobom workspace for recording
+        run: |
+          uv sync --locked
+          echo "${PWD}/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Record demo GIF via VHS
+        uses: charmbracelet/vhs-action@f6d7db07a432fcd3b06772628d36a57f96d95dcf # v2
+        with:
+          path: docs/assets/demo.tape
+
+      - name: Upload rendered demo.gif artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: zerobom-demo-gif
+          path: docs/assets/demo.gif
