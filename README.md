@@ -8,6 +8,11 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Standards: OSV 1.6.7 & SARIF 2.1.0](https://img.shields.io/badge/standards-OSV%201.6.7%20%7C%20SARIF%202.1.0-brightgreen.svg)](docs/architecture.md)
 
+[![PyPI - zerobom](https://img.shields.io/pypi/v/zerobom?label=PyPI%20zerobom)](https://pypi.org/project/zerobom/)
+[![PyPI - zerobom-aws](https://img.shields.io/pypi/v/zerobom-aws?label=PyPI%20zerobom-aws)](https://pypi.org/project/zerobom-aws/)
+[![PyPI - zerobom-gcp](https://img.shields.io/pypi/v/zerobom-gcp?label=PyPI%20zerobom-gcp)](https://pypi.org/project/zerobom-gcp/)
+[![PyPI - zerobom-azure](https://img.shields.io/pypi/v/zerobom-azure?label=PyPI%20zerobom-azure)](https://pypi.org/project/zerobom-azure/)
+
 `zerobom` bridges the window between **security blog disclosure** (Google Project Zero, Wiz Research, Trail of Bits, Datadog Security Labs, vendor blogs) and **official CVE/NVD indexing**—isolating the LLM strictly to raw text extraction while keeping quote grounding, package resolution, and version-range matching 100% deterministic.
 
 The LLM is a narrow, replaceable **~15% extraction layer**. Every extracted claim is grounded verbatim in source text, validated against canonical Package URLs and optional package registries, compiled into **OSV 1.6.7-compatible JSON**, and matched deterministically against your CycloneDX, SPDX, container, Kubernetes, or cloud software inventories using [`univers`](https://github.com/aboutcode-org/univers) ecosystem version math.
@@ -113,7 +118,16 @@ uv run python benchmarks/run_evals.py --mode offline
 
 ## Pluggable Inventory Backends (`zerobom.backends`)
 
-Core `zerobom` has **zero cloud vendor dependencies**. Enterprise & cloud integrations load lazily via standard Python `zerobom.backends` entry points (`zerobom[aws|gcp|azure]` companion cloud packages publish alongside `v0.1.0` via `plugins-v*` tags):
+Core `zerobom` has **zero cloud vendor dependencies**. Enterprise & cloud integrations load lazily via standard Python `zerobom.backends` entry points (`zerobom[aws|gcp|azure]` companion cloud packages publish alongside core via `plugins-v*` tags):
+
+### Published Packages (PyPI)
+
+| Distribution | Install Extra | Included Backends | PyPI Status |
+| --- | --- | --- | --- |
+| [`zerobom`](https://pypi.org/project/zerobom/) | `pip install zerobom` | `local_sbom`, `dependency_track`, `oci_sbom`, `k8s_sbom` | [![PyPI - zerobom](https://img.shields.io/pypi/v/zerobom)](https://pypi.org/project/zerobom/) |
+| [`zerobom-aws`](https://pypi.org/project/zerobom-aws/) | `pip install "zerobom[aws]"` | `aws_security_hub`, `aws_inspector_sbom`, `s3_sbom` | [![PyPI - zerobom-aws](https://img.shields.io/pypi/v/zerobom-aws)](https://pypi.org/project/zerobom-aws/) |
+| [`zerobom-gcp`](https://pypi.org/project/zerobom-gcp/) | `pip install "zerobom[gcp]"` | `gcp_artifact_analysis`, `gcs_sbom` | [![PyPI - zerobom-gcp](https://img.shields.io/pypi/v/zerobom-gcp)](https://pypi.org/project/zerobom-gcp/) |
+| [`zerobom-azure`](https://pypi.org/project/zerobom-azure/) | `pip install "zerobom[azure]"` | `azure_resource_graph`, `azure_blob_sbom` | [![PyPI - zerobom-azure](https://img.shields.io/pypi/v/zerobom-azure)](https://pypi.org/project/zerobom-azure/) |
 
 | Backend Name | Package / Extra | Inventory Source |
 | --- | --- | --- |
@@ -122,11 +136,12 @@ Core `zerobom` has **zero cloud vendor dependencies**. Enterprise & cloud integr
 | `oci_sbom` | built-in core | OCI registry attached CycloneDX/SPDX SBOMs & in-toto/DSSE attestations |
 | `k8s_sbom` | built-in core | Trivy Operator `sbomreports` / `clustersbomreports` CRDs |
 | `aws_security_hub` | `zerobom[aws]` | AWS Security Hub `GetSoftwareV2` / `GetSoftwareResourcesV2` |
-| `s3_sbom` | `zerobom[aws]` | Amazon S3 SBOM prefixes |
-| `gcp_artifact_analysis` | `zerobom[gcp]` (+ `[adc]`) | GCP Container/Artifact Analysis package occurrences |
-| `gcs_sbom` | `zerobom[gcp]` (+ `[adc]`) | Google Cloud Storage SBOM prefixes |
-| `azure_resource_graph` | `zerobom[azure]` (+ `[identity]`) | Azure Resource Graph `microsoft.security/softwareinventories` |
-| `azure_blob_sbom` | `zerobom[azure]` (+ `[identity]`) | Azure Blob Storage SBOM prefixes |
+| `aws_inspector_sbom` | `zerobom[aws]` | Amazon Inspector2 CycloneDX 1.4 / SPDX 2.3 SBOM exports (`report_id` or opt-in export) |
+| `s3_sbom` | `zerobom[aws]` | Amazon S3 SBOM prefixes (plain & `.gz`, Glacier skipping) |
+| `gcp_artifact_analysis` | `zerobom[gcp]` | GCP Container/Artifact Analysis `PACKAGE` & `SBOM_REFERENCE` occurrences |
+| `gcs_sbom` | `zerobom[gcp]` | Google Cloud Storage SBOM prefixes (plain & `.gz`) |
+| `azure_resource_graph` | `zerobom[azure]` | Azure Resource Graph `microsoft.security/softwareinventories` |
+| `azure_blob_sbom` | `zerobom[azure]` | Azure Blob Storage SBOM prefixes (plain & `.gz`, Archive skipping) |
 
 Want to add a custom inventory backend? Follow [Authoring `zerobom.backends` Inventory Plugins](docs/PLUGIN_AUTHORING.md).
 
