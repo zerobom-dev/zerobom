@@ -2,7 +2,7 @@
 site_name = "zerobom"
 site_description = "Deterministic pre-CVE security advisory verification and OSV compilation engine."
 site_author = "zerobom Contributors"
-site_url = "https://zerobom.dev/"
+site_url = "https://docs.zerobom.dev/"
 repo_url = "https://github.com/zerobom-dev/zerobom"
 repo_name = "zerobom-dev/zerobom"
 edit_uri = "edit/main/docs/"

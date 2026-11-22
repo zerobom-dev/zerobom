@@ -55,7 +55,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://zerobom.dev/"
-Documentation = "https://zerobom.dev/"
+Documentation = "https://docs.zerobom.dev/"
 Repository = "https://github.com/zerobom-dev/zerobom"
 Issues = "https://github.com/zerobom-dev/zerobom/issues"
 Changelog = "https://github.com/zerobom-dev/zerobom/blob/main/CHANGELOG.md"

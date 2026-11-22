@@ -3,7 +3,7 @@
 > **Hunt CVE-less and pre-CVE vulnerabilities published in security blogs against your software inventories before NVD or OSV publishes an entry.**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/zerobom-dev/zerobom/zerobom-ci.yml?branch=main&label=CI)](https://github.com/zerobom-dev/zerobom/actions/workflows/zerobom-ci.yml)
-[![Docs](https://img.shields.io/github/actions/workflow/status/zerobom-dev/zerobom/docs.yml?branch=main&label=docs)](https://zerobom.dev/)
+[![Docs](https://img.shields.io/github/actions/workflow/status/zerobom-dev/zerobom/docs.yml?branch=main&label=docs)](https://docs.zerobom.dev/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Standards: OSV 1.6.7 & SARIF 2.1.0](https://img.shields.io/badge/standards-OSV%201.6.7%20%7C%20SARIF%202.1.0-brightgreen.svg)](docs/architecture.md)

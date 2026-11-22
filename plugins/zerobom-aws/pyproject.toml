@@ -33,7 +33,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://zerobom.dev/"
-Documentation = "https://zerobom.dev/backends/"
+Documentation = "https://docs.zerobom.dev/backends/"
 Repository = "https://github.com/zerobom-dev/zerobom"
 Issues = "https://github.com/zerobom-dev/zerobom/issues"
 
