@@ -2,18 +2,22 @@
 
 Google Cloud Platform inventory backend plugins for [`zerobom`](https://github.com/zerobom-dev/zerobom), integrating via standard `zerobom.backends` entry points:
 
-- **`gcp_artifact_analysis`**: Queries GCP Container Analysis / Artifact Analysis occurrences (`kind="PACKAGE"`) with safe CEL filtering, OS CPE resolution, and paginated lookup.
-- **`gcs_sbom`**: Streams CycloneDX (1.4–1.6) and SPDX (2.2–2.3) JSON SBOMs from Google Cloud Storage prefixes.
+- **`gcp_artifact_analysis`**: Queries GCP Container Analysis / Artifact Analysis occurrences (`kind="PACKAGE"` and/or `kind="SBOM_REFERENCE"` with SHA-256 verified GCS SBOM resolution), supporting global and regional (`location=...`) endpoints, CPE 2.2/2.3 OS distro resolution, and safe CEL filtering.
+- **`gcs_sbom`**: Streams plain or `.gz`-compressed CycloneDX (1.4–1.6) and SPDX (2.2–2.3) JSON SBOMs concurrently from Google Cloud Storage prefixes (including Requester Pays via `user_project=...`).
 
 ## Installation
 
 ```bash
-# With explicit token / Workload Identity token via ZEROBOM_GCP_TOKEN:
 uvx "zerobom[gcp]" scan --osv advisory.osv.json --backend gcp_artifact_analysis --backend-opt project_id=my-gcp-project
-
-# Or include google-auth for Application Default Credentials (use_adc=true):
-pip install "zerobom-gcp[adc]"
 ```
+
+Or install into an existing project environment:
+
+```bash
+pip install "zerobom[gcp]"
+```
+
+Application Default Credentials (`google-auth[requests]`) are included by default and refresh automatically across long-lived `watch` sessions.
 
 ## Usage Examples
 
@@ -24,15 +28,19 @@ zerobom scan \
   --osv advisory.osv.json \
   --backend gcp_artifact_analysis \
   --backend-opt project_id=my-prod-project \
-  --backend-opt use_adc=true \
+  --backend-opt location=us \
+  --backend-opt mode=both \
   --format sarif > results.sarif
 ```
 
-Authentication options:
-- `access_token` / `ZEROBOM_GCP_TOKEN` (direct OAuth bearer token)
-- `use_adc=true` with `zerobom-gcp[adc]` (`google-auth`)
+Authentication priority:
+1. Explicit `access_token` option
+2. `ZEROBOM_GCP_ACCESS_TOKEN`, `ZEROBOM_GCP_TOKEN`, or `GOOGLE_OAUTH_ACCESS_TOKEN`
+3. Automatic Application Default Credentials (disable fallback with `--backend-opt use_adc=false`)
 
-Least-privilege IAM role: `roles/containeranalysis.occurrences.viewer`.
+Least-privilege IAM roles:
+- `roles/containeranalysis.occurrences.viewer`
+- `roles/storage.objectViewer` (when using `mode=sbom_reference` or `mode=both`)
 
 ### Google Cloud Storage SBOM Prefix (`gcs_sbom`)
 
@@ -41,8 +49,7 @@ zerobom scan \
   --osv advisory.osv.json \
   --backend gcs_sbom \
   --backend-opt bucket=corp-sboms \
-  --backend-opt prefix=services/ \
-  --backend-opt use_adc=true
+  --backend-opt prefix=services/
 ```
 
 Least-privilege IAM role: `roles/storage.objectViewer`.

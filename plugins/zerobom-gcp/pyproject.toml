@@ -29,6 +29,7 @@ classifiers = [
 dependencies = [
     "zerobom>=0.1.0,<0.2.0",
     "httpx>=0.27",
+    "google-auth[requests]>=2.35",
 ]
 
 [project.urls]
@@ -38,9 +39,7 @@ Repository = "https://github.com/zerobom-dev/zerobom"
 Issues = "https://github.com/zerobom-dev/zerobom/issues"
 
 [project.optional-dependencies]
-adc = [
-    "google-auth>=2.35",
-]
+adc = []
 
 [project.entry-points."zerobom.backends"]
 gcp_artifact_analysis = "zerobom_gcp.artifact_analysis:GcpArtifactAnalysisBackend"
@@ -48,3 +47,11 @@ gcs_sbom = "zerobom_gcp.gcs_sbom:GcsSbomBackend"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/zerobom_gcp"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src/zerobom_gcp",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]

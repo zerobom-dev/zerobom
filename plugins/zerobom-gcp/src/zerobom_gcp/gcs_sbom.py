@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import json
-import re
-from collections.abc import Mapping, Sequence
+import time
+from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -27,7 +27,6 @@ from zerobom.backends._http import (
     parse_int_opt,
     parse_optional_str_opt,
     parse_str_list_opt,
-    read_bounded_response,
     reject_unknown_config_keys,
     resolve_tls_verify,
     validate_api_base_url,
@@ -37,12 +36,18 @@ from zerobom.backends._http import (
 )
 from zerobom.backends.sbom_parser import MAX_SBOM_FILE_BYTES, clean_optional_str
 from zerobom.models import InventoryComponent, PackageQuery
-from zerobom_gcp._auth import resolve_gcp_bearer_token
+from zerobom_gcp._auth import GcpTokenProvider
+from zerobom_gcp._common import (
+    DEFAULT_SBOM_SUFFIXES,
+    build_gcp_http_client,
+    decode_json_dict,
+    maybe_decompress_sbom_bytes,
+    request_with_retry,
+    validate_gcs_bucket,
+)
 
 DEFAULT_GCS_API_URL = "https://storage.googleapis.com"
 DEFAULT_API_LIST_BYTES = 10 * 1024 * 1024
-_GCS_BUCKET_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]$")
-_DEFAULT_SUFFIXES: tuple[str, ...] = (".json", ".cdx.json", ".spdx.json")
 
 _ALLOWED_CONFIG_KEYS: frozenset[str] = frozenset(
     {
@@ -51,10 +56,13 @@ _ALLOWED_CONFIG_KEYS: frozenset[str] = frozenset(
         "suffixes",
         "access_token",
         "use_adc",
+        "user_project",
         "api_base_url",
         "max_objects",
         "max_pages",
         "max_sbom_bytes",
+        "max_concurrency",
+        "max_retries",
         "timeout_seconds",
         "ca_bundle",
         "verify_tls",
@@ -84,26 +92,31 @@ class GcsSbomBackend:
         *,
         bucket: str,
         prefix: str = "",
-        suffixes: Sequence[str] = _DEFAULT_SUFFIXES,
+        suffixes: Sequence[str] = DEFAULT_SBOM_SUFFIXES,
         access_token: str | None = None,
-        use_adc: bool = False,
+        use_adc: bool | None = None,
+        user_project: str | None = None,
         api_base_url: str = DEFAULT_GCS_API_URL,
         max_objects: int = 500,
         max_pages: int = 50,
         max_sbom_bytes: int = MAX_SBOM_FILE_BYTES,
+        max_concurrency: int = 8,
+        max_retries: int = 3,
         timeout_seconds: float = DEFAULT_API_TIMEOUT_SECONDS,
         ca_bundle: str | Path | None = None,
         verify_tls: bool = True,
         allow_insecure_http: bool = False,
         strict: bool = False,
         http_client: httpx.Client | None = None,
+        token_provider: GcpTokenProvider | None = None,
+        sleep_fn: Callable[[float], None] = time.sleep,
     ) -> None:
         """Initialize a Google Cloud Storage JSON API v1 SBOM inventory backend.
 
         Raises:
             BackendConfigError: If bucket, prefix, auth, URL, TLS, or bounds are invalid.
         """
-        if not isinstance(use_adc, bool):
+        if use_adc is not None and not isinstance(use_adc, bool):
             raise BackendConfigError("Configuration option 'use_adc' must be a bool.")
         if not isinstance(verify_tls, bool):
             raise BackendConfigError("Configuration option 'verify_tls' must be a bool.")
@@ -112,11 +125,7 @@ class GcsSbomBackend:
         if not isinstance(strict, bool):
             raise BackendConfigError("Configuration option 'strict' must be a bool.")
 
-        cleaned_bucket = validate_no_control_chars(bucket, field_name="bucket", max_length=222)
-        if ".." in cleaned_bucket or not _GCS_BUCKET_RE.fullmatch(cleaned_bucket):
-            raise BackendConfigError(f"Invalid GCS bucket name: {bucket!r}.")
-
-        self._bucket = cleaned_bucket
+        self._bucket = validate_gcs_bucket(bucket)
         self._prefix = _validate_prefix(prefix)
         self._suffixes = tuple(
             validate_no_control_chars(s, field_name="suffixes", max_length=32).lower()
@@ -127,7 +136,14 @@ class GcsSbomBackend:
             allow_insecure_http=allow_insecure_http,
             field_name="api_base_url",
         )
-        self._bearer_token = resolve_gcp_bearer_token(access_token, use_adc=use_adc)
+        self._token_provider = token_provider or GcpTokenProvider(
+            access_token=access_token, use_adc=use_adc
+        )
+        self._user_project = (
+            validate_no_control_chars(user_project, field_name="user_project", max_length=64)
+            if user_project is not None
+            else self._token_provider.quota_project_id
+        )
         self._max_objects = validate_bounded_int(
             max_objects, field_name="max_objects", min_value=1, max_value=10000
         )
@@ -140,8 +156,15 @@ class GcsSbomBackend:
             min_value=1024,
             max_value=200 * 1024 * 1024,
         )
+        self._max_concurrency = validate_bounded_int(
+            max_concurrency, field_name="max_concurrency", min_value=1, max_value=32
+        )
+        self._max_retries = validate_bounded_int(
+            max_retries, field_name="max_retries", min_value=0, max_value=10
+        )
         self._timeout_seconds = validate_timeout_seconds(timeout_seconds)
         self._strict = strict
+        self._sleep_fn = sleep_fn
         self._index: InMemoryComponentIndex | None = None
 
         if http_client is not None:
@@ -149,10 +172,10 @@ class GcsSbomBackend:
             self._owns_client = False
         else:
             verify_arg = resolve_tls_verify(verify_tls=verify_tls, ca_bundle=ca_bundle)
-            self._client = httpx.Client(
-                timeout=self._timeout_seconds,
+            self._client = build_gcp_http_client(
+                timeout_seconds=self._timeout_seconds,
                 verify=verify_arg,
-                follow_redirects=False,
+                max_concurrency=self._max_concurrency,
             )
             self._owns_client = True
 
@@ -164,14 +187,21 @@ class GcsSbomBackend:
         if bucket is None:
             raise BackendConfigError("GcsSbomBackend requires 'bucket' configuration.")
 
+        raw_use_adc = (
+            parse_bool_opt(config, "use_adc", default=False)
+            if "use_adc" in config and config["use_adc"] is not None
+            else None
+        )
         raw_suffixes = parse_str_list_opt(config, "suffixes", max_items=20, max_item_length=32)
+
         return cls(
             bucket=bucket,
             prefix=parse_optional_str_opt(config, "prefix", max_length=1024, allow_empty=True)
             or "",
-            suffixes=raw_suffixes or _DEFAULT_SUFFIXES,
+            suffixes=raw_suffixes or DEFAULT_SBOM_SUFFIXES,
             access_token=parse_optional_str_opt(config, "access_token", max_length=8192),
-            use_adc=parse_bool_opt(config, "use_adc", default=False),
+            use_adc=raw_use_adc,
+            user_project=parse_optional_str_opt(config, "user_project", max_length=64),
             api_base_url=parse_optional_str_opt(
                 config, "api_base_url", max_length=MAX_API_URL_LENGTH
             )
@@ -187,6 +217,10 @@ class GcsSbomBackend:
                 min_value=1024,
                 max_value=200 * 1024 * 1024,
             ),
+            max_concurrency=parse_int_opt(
+                config, "max_concurrency", default=8, min_value=1, max_value=32
+            ),
+            max_retries=parse_int_opt(config, "max_retries", default=3, min_value=0, max_value=10),
             timeout_seconds=parse_float_opt(
                 config,
                 "timeout_seconds",
@@ -227,12 +261,9 @@ class GcsSbomBackend:
     def load(self) -> int:
         """List and index bounded CycloneDX/SPDX SBOM objects under the configured GCS prefix."""
         list_url = f"{self._api_base_url}/storage/v1/b/{quote(self._bucket, safe='')}/o"
-        headers = {
-            "Accept": "application/json",
-            "Authorization": f"Bearer {self._bearer_token}",
-        }
+        list_headers = {"Accept": "application/json"}
 
-        objects: list[tuple[str, int | None, str | None]] = []
+        objects: list[tuple[str, int | None, str | None, str | None]] = []
         page_token: str | None = None
         completed = False
 
@@ -240,20 +271,25 @@ class GcsSbomBackend:
             params: dict[str, str] = {"maxResults": "200"}
             if self._prefix:
                 params["prefix"] = self._prefix
+            if self._user_project is not None:
+                params["userProject"] = self._user_project
             if page_token is not None:
                 params["pageToken"] = page_token
 
-            status, _, body = read_bounded_response(
+            status, _, body = request_with_retry(
                 self._client,
                 "GET",
                 list_url,
+                token_provider=self._token_provider,
                 max_bytes=DEFAULT_API_LIST_BYTES,
-                params=params,
-                headers=headers,
                 backend_name=self.name,
+                params=params,
+                headers=list_headers,
+                max_retries=self._max_retries,
+                sleep_fn=self._sleep_fn,
             )
             self._check_status(status, list_url)
-            doc = self._decode_json_dict(body, list_url)
+            doc = decode_json_dict(body, list_url, self.name)
 
             raw_items = doc.get("items")
             if isinstance(raw_items, list):
@@ -277,7 +313,8 @@ class GcsSbomBackend:
                         else None
                     )
                     etag = clean_optional_str(item.get("etag"))
-                    objects.append((obj_name, size_int, etag))
+                    content_encoding = clean_optional_str(item.get("contentEncoding"))
+                    objects.append((obj_name, size_int, etag, content_encoding))
                     if len(objects) > self._max_objects:
                         raise BackendQueryError(
                             f"[{self.name}] Matching GCS SBOM objects exceeded "
@@ -294,33 +331,52 @@ class GcsSbomBackend:
                 f"[{self.name}] GCS object listing exceeded max_pages={self._max_pages}."
             )
 
-        index = InMemoryComponentIndex()
-        for obj_name, declared_size, etag in objects:
+        for obj_name, declared_size, _, _ in objects:
             if declared_size is not None and declared_size > self._max_sbom_bytes:
                 raise BackendQueryError(
                     f"[{self.name}] GCS object gs://{self._bucket}/{obj_name} declares size "
                     f"{declared_size} > limit {self._max_sbom_bytes} bytes."
                 )
 
+        def _process_object(
+            item: tuple[str, int | None, str | None, str | None],
+        ) -> tuple[InventoryComponent, ...]:
+            obj_name, _, etag, listed_encoding = item
             obj_url = (
                 f"{self._api_base_url}/storage/v1/b/{quote(self._bucket, safe='')}/o/"
                 f"{quote(obj_name, safe='')}"
             )
-            status, _, raw_bytes = read_bounded_response(
+            dl_params: dict[str, str] = {"alt": "media"}
+            if self._user_project is not None:
+                dl_params["userProject"] = self._user_project
+
+            status, resp_headers, raw_bytes = request_with_retry(
                 self._client,
                 "GET",
                 obj_url,
+                token_provider=self._token_provider,
                 max_bytes=self._max_sbom_bytes,
-                params={"alt": "media"},
-                headers={"Authorization": f"Bearer {self._bearer_token}"},
                 backend_name=self.name,
+                params=dl_params,
+                max_retries=self._max_retries,
+                sleep_fn=self._sleep_fn,
             )
             self._check_status(status, obj_url)
 
             uri = f"gs://{self._bucket}/{obj_name}"
+            effective_encoding = (
+                clean_optional_str(resp_headers.get("content-encoding")) or listed_encoding
+            )
             try:
-                components = parse_sbom_bytes(
+                plain_bytes = maybe_decompress_sbom_bytes(
                     raw_bytes,
+                    object_label=uri,
+                    content_encoding=effective_encoding,
+                    max_bytes=self._max_sbom_bytes,
+                    backend_name=self.name,
+                )
+                return parse_sbom_bytes(
+                    plain_bytes,
                     asset_id=uri,
                     backend=self.name,
                     location=uri,
@@ -333,8 +389,30 @@ class GcsSbomBackend:
                     raise BackendQueryError(
                         f"[{self.name}] Failed to parse GCS SBOM {uri}: {exc}"
                     ) from exc
-                continue
-            index.add_components(components)
+                return ()
+
+        index = InMemoryComponentIndex()
+        if self._max_concurrency > 1 and len(objects) > 1:
+            ordered: list[tuple[InventoryComponent, ...] | None] = [None] * len(objects)
+            with ThreadPoolExecutor(max_workers=min(self._max_concurrency, len(objects))) as pool:
+                future_to_idx: dict[Future[tuple[InventoryComponent, ...]], int] = {
+                    pool.submit(_process_object, item): idx for idx, item in enumerate(objects)
+                }
+                try:
+                    for fut in as_completed(future_to_idx):
+                        ordered[future_to_idx[fut]] = fut.result()
+                except Exception:
+                    for pending in future_to_idx:
+                        pending.cancel()
+                    raise
+            for comps in ordered:
+                if comps:
+                    index.add_components(comps)
+        else:
+            for item in objects:
+                comps = _process_object(item)
+                if comps:
+                    index.add_components(comps)
 
         self._index = index
         return len(index.components)
@@ -357,18 +435,6 @@ class GcsSbomBackend:
             raise BackendQueryError(
                 f"[{self.name}] GCS API returned unexpected status {status} at {url}."
             )
-
-    def _decode_json_dict(self, body: bytes, url: str) -> dict[str, Any]:
-        """Decode UTF-8 JSON object from GCS JSON API."""
-        try:
-            decoded = json.loads(body.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise BackendQueryError(
-                f"[{self.name}] Invalid JSON response from {url}: {exc}"
-            ) from exc
-        if not isinstance(decoded, dict):
-            raise BackendQueryError(f"[{self.name}] Expected JSON object from {url}.")
-        return decoded
 
     def find_components(self, queries: Sequence[PackageQuery]) -> tuple[InventoryComponent, ...]:
         """Search indexed GCS CycloneDX/SPDX SBOM components for package matches."""

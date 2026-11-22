@@ -121,6 +121,9 @@ include = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "emulator: real-wire cloud storage emulator integration tests",
+]
 
 [tool.ruff]
 target-version = "py311"

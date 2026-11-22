@@ -50,15 +50,21 @@ Install only the cloud adapter you need without pulling other cloud SDKs:
 
 | Cloud | Install Extra | Backends | Key Options (`--backend-opt`) |
 | --- | --- | --- | --- |
-| **AWS** | `zerobom[aws]` | `aws_security_hub`, `s3_sbom` | `region_name`, `account_ids`, `resource_types`, `bucket`, `prefix` |
-| **GCP** | `zerobom[gcp]` (+ `[adc]`) | `gcp_artifact_analysis`, `gcs_sbom` | `project_id`, `resource_uri_prefix`, `bucket`, `prefix`, `use_adc` |
-| **Azure** | `zerobom[azure]` (+ `[identity]`) | `azure_resource_graph`, `azure_blob_sbom` | `subscriptions`, `account_name`, `container`, `prefix`, `use_default_credential` |
+| **AWS** | `zerobom[aws]` | `aws_security_hub`, `aws_inspector_sbom`, `s3_sbom` | `region_name`, `role_arn`, `account_ids`, `organization_id`, `report_id`, `trigger_export`, `bucket`, `prefix` |
+| **GCP** | `zerobom[gcp]` | `gcp_artifact_analysis`, `gcs_sbom` | `project_id`, `location`, `mode`, `resource_uri_prefix`, `allowed_sbom_buckets`, `bucket`, `prefix`, `user_project`, `use_adc` |
+| **Azure** | `zerobom[azure]` | `azure_resource_graph`, `azure_blob_sbom` | `subscriptions`, `management_groups`, `tenant_scope`, `cloud`, `account_name`, `container`, `prefix`, `use_default_credential` |
+
+### Cloud Connector Capabilities & Auth
+
+- **AWS (`zerobom-aws`):** Supports cross-account STS `AssumeRole` (`role_arn`, `external_id`), AWS Organizations delegated-admin `Scopes` (`organization_id`, `organizational_unit_ids`), Amazon Inspector2 SBOM exports (`report_id` read-only by default, or opt-in `trigger_export=true`), bounded `.json.gz` decompression, and Glacier/Deep Archive skipping (`skip_archived=true`).
+- **GCP (`zerobom-gcp`):** Bundles `google-auth[requests]` with automatic thread-safe ADC refresh, supports `ZEROBOM_GCP_ACCESS_TOKEN` / `ZEROBOM_GCP_TOKEN` / `GOOGLE_OAUTH_ACCESS_TOKEN`, regional Container Analysis `location` endpoints, `mode=sbom_reference` / `mode=both` (with mandatory `gs://` + SHA-256 verification), `user_project`, and concurrent `.gz` GCS streaming.
+- **Azure (`zerobom-azure`):** Bundles `azure-identity` with automatic `DefaultAzureCredential` refresh, supports `ZEROBOM_AZURE_ACCESS_TOKEN` / `ZEROBOM_AZURE_TOKEN` / `ZEROBOM_AZURE_SAS_TOKEN`, sovereign clouds (`cloud=usgov` / `china`), `management_groups` & `tenant_scope`, quota-aware `$skipToken` pacing (`x-ms-user-quota-*`), Defender `osPlatform` distro mapping, and `Archive`-tier Blob skipping. Note: `azure_resource_graph` (`microsoft.security/softwareinventories`) covers VM/Arc servers via Defender TVM; pair with `oci_sbom` or `azure_blob_sbom` for container SBOMs.
 
 ### Least-Privilege Cloud Scopes
 
-- **AWS (`zerobom-aws`):** `securityhub:GetSoftwareV2`, `securityhub:GetSoftwareResourcesV2`, and `s3:ListBucket` + `s3:GetObject`.
+- **AWS (`zerobom-aws`):** `securityhub:GetSoftwareV2`, `securityhub:GetSoftwareResourcesV2`, `inspector2:GetSbomExport` (+ `inspector2:CreateSbomExport` only when `trigger_export=true`), and `s3:ListBucket` + `s3:GetObject`.
 - **GCP (`zerobom-gcp`):** `roles/containeranalysis.occurrences.viewer` and `roles/storage.objectViewer`.
-- **Azure (`zerobom-azure`):** `Reader` + `Security Reader` on target subscriptions, and `Storage Blob Data Reader` for Blob SBOM prefixes.
+- **Azure (`zerobom-azure`):** `Reader` + `Security Reader` on target subscriptions or management groups, and `Storage Blob Data Reader` for Blob SBOM prefixes.
 
 ## Plugin Code-Execution Trust Boundary
 

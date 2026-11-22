@@ -2,24 +2,13 @@
 
 from __future__ import annotations
 
-import os
-import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-import boto3
-from botocore.config import Config as BotoConfig
-from botocore.exceptions import BotoCoreError, ClientError
-
-from zerobom.backends import (
-    BackendConfigError,
-    BackendQueryError,
-    InMemoryComponentIndex,
-    SbomParseError,
-    parse_sbom_bytes,
-)
+from zerobom.backends import BackendConfigError, InMemoryComponentIndex
 from zerobom.backends._http import (
     DEFAULT_API_TIMEOUT_SECONDS,
+    MAX_API_URL_LENGTH,
     parse_bool_opt,
     parse_float_opt,
     parse_int_opt,
@@ -30,12 +19,20 @@ from zerobom.backends._http import (
     validate_no_control_chars,
     validate_timeout_seconds,
 )
-from zerobom.backends.sbom_parser import MAX_SBOM_FILE_BYTES, clean_optional_str
+from zerobom.backends.sbom_parser import MAX_SBOM_FILE_BYTES
 from zerobom.models import InventoryComponent, PackageQuery
-
-_S3_BUCKET_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$")
-_AWS_REGION_RE = re.compile(r"^[a-z]{2}(?:-[a-z]+)+-[0-9]+$")
-_DEFAULT_SUFFIXES: tuple[str, ...] = (".json", ".cdx.json", ".spdx.json")
+from zerobom_aws._common import (
+    DEFAULT_SBOM_SUFFIXES,
+    load_s3_sbom_prefix,
+    validate_s3_bucket,
+    validate_s3_prefix,
+)
+from zerobom_aws._session import (
+    build_aws_client,
+    resolve_env_aws_region,
+    validate_aws_account_id,
+    validate_aws_region,
+)
 
 _ALLOWED_CONFIG_KEYS: frozenset[str] = frozenset(
     {
@@ -44,25 +41,22 @@ _ALLOWED_CONFIG_KEYS: frozenset[str] = frozenset(
         "suffixes",
         "region_name",
         "profile_name",
+        "role_arn",
+        "external_id",
+        "role_session_name",
+        "endpoint_url",
+        "allow_insecure_http",
+        "expected_bucket_owner",
         "max_objects",
         "max_pages",
         "max_sbom_bytes",
+        "max_concurrency",
+        "max_retries",
         "timeout_seconds",
+        "skip_archived",
         "strict",
     }
 )
-
-
-def _validate_s3_prefix(prefix: str) -> str:
-    """Validate an S3 key prefix against control characters and traversal segments."""
-    cleaned = validate_no_control_chars(
-        prefix, field_name="prefix", max_length=1024, allow_empty=True
-    )
-    if "\\" in cleaned or any(seg == ".." for seg in cleaned.split("/")):
-        raise BackendConfigError(
-            f"S3 prefix {prefix!r} must not contain backslashes or '..' traversal segments."
-        )
-    return cleaned
 
 
 class S3SbomBackend:
@@ -73,13 +67,22 @@ class S3SbomBackend:
         *,
         bucket: str,
         prefix: str = "",
-        suffixes: Sequence[str] = _DEFAULT_SUFFIXES,
+        suffixes: Sequence[str] = DEFAULT_SBOM_SUFFIXES,
         region_name: str | None = None,
         profile_name: str | None = None,
+        role_arn: str | None = None,
+        external_id: str | None = None,
+        role_session_name: str = "zerobom-s3-sbom",
+        endpoint_url: str | None = None,
+        allow_insecure_http: bool = False,
+        expected_bucket_owner: str | None = None,
         max_objects: int = 500,
         max_pages: int = 50,
         max_sbom_bytes: int = MAX_SBOM_FILE_BYTES,
+        max_concurrency: int = 8,
+        max_retries: int = 3,
         timeout_seconds: float = DEFAULT_API_TIMEOUT_SECONDS,
+        skip_archived: bool = True,
         strict: bool = False,
         client: Any | None = None,
     ) -> None:
@@ -91,41 +94,45 @@ class S3SbomBackend:
             suffixes: Filename suffixes selected as candidate SBOM objects.
             region_name: Optional AWS region.
             profile_name: Optional AWS shared profile.
+            role_arn: Optional IAM role ARN assumed via STS ``AssumeRole``.
+            external_id: Optional STS ``ExternalId`` paired with ``role_arn``.
+            role_session_name: STS session identifier when assuming ``role_arn``.
+            endpoint_url: Optional custom S3 / LocalStack / MinIO endpoint URL.
+            allow_insecure_http: Permit ``http://`` custom endpoints for local testing only.
+            expected_bucket_owner: Optional 12-digit AWS account ID verifying bucket ownership.
             max_objects: Maximum matching objects fetched before failing closed.
             max_pages: Maximum ``ListObjectsV2`` continuation pages.
-            max_sbom_bytes: Maximum per-object byte limit prior to JSON parsing.
+            max_sbom_bytes: Maximum per-object byte limit (compressed and decompressed).
+            max_concurrency: Bounded worker threads for S3 object downloads (``1..32``).
+            max_retries: Bounded adaptive botocore retry attempts (``0..10``).
             timeout_seconds: Botocore request timeout in seconds.
+            skip_archived: Skip ``GLACIER``/``DEEP_ARCHIVE`` objects cleanly when ``True``.
             strict: Raise :class:`BackendQueryError` if a matching object is not a valid SBOM.
             client: Optional pre-built boto3 S3 client (for testing).
 
         Raises:
-            BackendConfigError: If bucket, prefix, suffixes, or bounds are invalid.
+            BackendConfigError: If bucket, prefix, suffixes, owner account, or bounds are invalid.
         """
         if not isinstance(strict, bool):
             raise BackendConfigError("Configuration option 'strict' must be a bool.")
+        if not isinstance(skip_archived, bool):
+            raise BackendConfigError("Configuration option 'skip_archived' must be a bool.")
 
-        cleaned_bucket = validate_no_control_chars(bucket, field_name="bucket", max_length=63)
-        if ".." in cleaned_bucket or not _S3_BUCKET_RE.fullmatch(cleaned_bucket):
-            raise BackendConfigError(f"Invalid S3 bucket name: {bucket!r}.")
-
-        self._bucket = cleaned_bucket
-        self._prefix = _validate_s3_prefix(prefix)
+        self._bucket = validate_s3_bucket(bucket)
+        self._prefix = validate_s3_prefix(prefix)
         self._suffixes = tuple(
             validate_no_control_chars(s, field_name="suffixes", max_length=32).lower()
             for s in suffixes
         )
-        if region_name is not None:
-            cleaned_region = validate_no_control_chars(
-                region_name, field_name="region_name", max_length=64
-            )
-            if not _AWS_REGION_RE.fullmatch(cleaned_region):
-                raise BackendConfigError(f"Invalid AWS region_name: {region_name!r}.")
-            self._region_name: str | None = cleaned_region
-        else:
-            self._region_name = None
+        self._region_name = validate_aws_region(region_name)
         self._profile_name = (
             validate_no_control_chars(profile_name, field_name="profile_name", max_length=128)
             if profile_name is not None
+            else None
+        )
+        self._expected_bucket_owner = (
+            validate_aws_account_id(expected_bucket_owner, field_name="expected_bucket_owner")
+            if expected_bucket_owner is not None
             else None
         )
         self._max_objects = validate_bounded_int(
@@ -140,7 +147,14 @@ class S3SbomBackend:
             min_value=1024,
             max_value=200 * 1024 * 1024,
         )
+        self._max_concurrency = validate_bounded_int(
+            max_concurrency, field_name="max_concurrency", min_value=1, max_value=32
+        )
+        self._max_retries = validate_bounded_int(
+            max_retries, field_name="max_retries", min_value=0, max_value=10
+        )
         self._timeout_seconds = validate_timeout_seconds(timeout_seconds)
+        self._skip_archived = skip_archived
         self._strict = strict
         self._index: InMemoryComponentIndex | None = None
 
@@ -148,16 +162,19 @@ class S3SbomBackend:
             self._client = client
             self._owns_client = False
         else:
-            session = boto3.Session(
+            self._client = build_aws_client(
+                "s3",
                 region_name=self._region_name,
                 profile_name=self._profile_name,
+                role_arn=role_arn,
+                external_id=external_id,
+                role_session_name=role_session_name,
+                endpoint_url=endpoint_url,
+                allow_insecure_http=allow_insecure_http,
+                timeout_seconds=self._timeout_seconds,
+                max_retries=self._max_retries,
+                max_pool_connections=max(10, self._max_concurrency + 2),
             )
-            boto_cfg = BotoConfig(
-                connect_timeout=self._timeout_seconds,
-                read_timeout=self._timeout_seconds,
-                retries={"max_attempts": 3, "mode": "standard"},
-            )
-            self._client = session.client("s3", config=boto_cfg)
             self._owns_client = True
 
     @classmethod
@@ -168,22 +185,29 @@ class S3SbomBackend:
         if bucket is None:
             raise BackendConfigError("S3SbomBackend requires 'bucket' configuration.")
 
-        region = parse_optional_str_opt(config, "region_name", max_length=64)
-        if region is None:
-            raw_env_region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
-            if raw_env_region and raw_env_region.strip():
-                region = validate_no_control_chars(
-                    raw_env_region, field_name="AWS_REGION", max_length=64
-                )
-
+        region = resolve_env_aws_region(
+            parse_optional_str_opt(config, "region_name", max_length=64)
+        )
         raw_suffixes = parse_str_list_opt(config, "suffixes", max_items=20, max_item_length=32)
+
         return cls(
             bucket=bucket,
             prefix=parse_optional_str_opt(config, "prefix", max_length=1024, allow_empty=True)
             or "",
-            suffixes=raw_suffixes or _DEFAULT_SUFFIXES,
+            suffixes=raw_suffixes or DEFAULT_SBOM_SUFFIXES,
             region_name=region,
             profile_name=parse_optional_str_opt(config, "profile_name", max_length=128),
+            role_arn=parse_optional_str_opt(config, "role_arn", max_length=512),
+            external_id=parse_optional_str_opt(config, "external_id", max_length=1224),
+            role_session_name=parse_optional_str_opt(config, "role_session_name", max_length=64)
+            or "zerobom-s3-sbom",
+            endpoint_url=parse_optional_str_opt(
+                config, "endpoint_url", max_length=MAX_API_URL_LENGTH
+            ),
+            allow_insecure_http=parse_bool_opt(config, "allow_insecure_http", default=False),
+            expected_bucket_owner=parse_optional_str_opt(
+                config, "expected_bucket_owner", max_length=12
+            ),
             max_objects=parse_int_opt(
                 config, "max_objects", default=500, min_value=1, max_value=10000
             ),
@@ -195,6 +219,10 @@ class S3SbomBackend:
                 min_value=1024,
                 max_value=200 * 1024 * 1024,
             ),
+            max_concurrency=parse_int_opt(
+                config, "max_concurrency", default=8, min_value=1, max_value=32
+            ),
+            max_retries=parse_int_opt(config, "max_retries", default=3, min_value=0, max_value=10),
             timeout_seconds=parse_float_opt(
                 config,
                 "timeout_seconds",
@@ -202,6 +230,7 @@ class S3SbomBackend:
                 min_value=0.5,
                 max_value=120.0,
             ),
+            skip_archived=parse_bool_opt(config, "skip_archived", default=True),
             strict=parse_bool_opt(config, "strict", default=False),
         )
 
@@ -221,144 +250,26 @@ class S3SbomBackend:
         """Return a safe representation of the S3 SBOM backend."""
         return (
             f"S3SbomBackend(bucket={self._bucket!r}, prefix={self._prefix!r}, "
-            f"strict={self._strict})"
+            f"strict={self._strict}, skip_archived={self._skip_archived})"
         )
-
-    def _matches_suffix(self, key: str) -> bool:
-        """Return True if an S3 object key matches configured SBOM suffixes."""
-        if not self._suffixes:
-            return True
-        lower = key.lower()
-        return any(lower.endswith(suf) for suf in self._suffixes)
 
     def load(self) -> int:
         """List and index bounded CycloneDX/SPDX SBOM objects under the configured prefix."""
-        entries: list[tuple[str, int | None, str | None]] = []
-        continuation_token: str | None = None
-        completed = False
-
-        for _ in range(self._max_pages):
-            kwargs: dict[str, Any] = {"Bucket": self._bucket, "Prefix": self._prefix}
-            if continuation_token is not None:
-                kwargs["ContinuationToken"] = continuation_token
-
-            try:
-                resp = self._client.list_objects_v2(**kwargs)
-            except (ClientError, BotoCoreError) as exc:
-                raise BackendQueryError(
-                    f"[{self.name}] S3 ListObjectsV2 failed on "
-                    f"s3://{self._bucket}/{self._prefix}: {exc}"
-                ) from exc
-
-            contents = resp.get("Contents")
-            if isinstance(contents, list):
-                for obj in contents:
-                    if not isinstance(obj, Mapping):
-                        continue
-                    key = clean_optional_str(obj.get("Key"))
-                    if key is None or not self._matches_suffix(key):
-                        continue
-                    if any(seg == ".." for seg in key.split("/")):
-                        raise BackendQueryError(
-                            f"[{self.name}] Disallowed traversal segment in S3 key {key!r}."
-                        )
-                    size = obj.get("Size")
-                    etag = clean_optional_str(obj.get("ETag"))
-                    entries.append((key, size if isinstance(size, int) else None, etag))
-                    if len(entries) > self._max_objects:
-                        raise BackendQueryError(
-                            f"[{self.name}] Matching S3 SBOM objects exceeded "
-                            f"max_objects={self._max_objects}."
-                        )
-
-            if not bool(resp.get("IsTruncated")):
-                completed = True
-                break
-            continuation_token = clean_optional_str(resp.get("NextContinuationToken"))
-            if continuation_token is None:
-                completed = True
-                break
-
-        if not completed:
-            raise BackendQueryError(
-                f"[{self.name}] S3 ListObjectsV2 pagination exceeded max_pages={self._max_pages}."
-            )
-
-        index = InMemoryComponentIndex()
-        for key, declared_size, etag in entries:
-            if declared_size is not None and declared_size > self._max_sbom_bytes:
-                raise BackendQueryError(
-                    f"[{self.name}] S3 object s3://{self._bucket}/{key} declares size "
-                    f"{declared_size} > limit {self._max_sbom_bytes} bytes."
-                )
-
-            raw_bytes = self._download_bounded_object(key)
-            uri = f"s3://{self._bucket}/{key}"
-            try:
-                components = parse_sbom_bytes(
-                    raw_bytes,
-                    asset_id=uri,
-                    backend=self.name,
-                    location=uri,
-                    scope=self._bucket,
-                    extra_metadata={
-                        "bucket": self._bucket,
-                        "key": key,
-                        "etag": etag,
-                    },
-                    max_bytes=self._max_sbom_bytes,
-                )
-            except SbomParseError as exc:
-                if self._strict:
-                    raise BackendQueryError(
-                        f"[{self.name}] Failed to parse S3 SBOM {uri}: {exc}"
-                    ) from exc
-                continue
-            index.add_components(components)
-
-        self._index = index
-        return len(index.components)
-
-    def _download_bounded_object(self, key: str) -> bytes:
-        """Download a single S3 object with strict ContentLength and read bounds."""
-        try:
-            resp = self._client.get_object(Bucket=self._bucket, Key=key)
-        except (ClientError, BotoCoreError) as exc:
-            raise BackendQueryError(
-                f"[{self.name}] S3 GetObject failed for s3://{self._bucket}/{key}: {exc}"
-            ) from exc
-
-        content_length = resp.get("ContentLength")
-        if isinstance(content_length, int) and content_length > self._max_sbom_bytes:
-            body = resp.get("Body")
-            if body is not None and callable(getattr(body, "close", None)):
-                body.close()
-            raise BackendQueryError(
-                f"[{self.name}] S3 object s3://{self._bucket}/{key} ContentLength "
-                f"({content_length} bytes) exceeds limit {self._max_sbom_bytes}."
-            )
-
-        body = resp.get("Body")
-        if body is None or not callable(getattr(body, "read", None)):
-            raise BackendQueryError(
-                f"[{self.name}] S3 GetObject returned empty body stream for {key!r}."
-            )
-        try:
-            raw = body.read(self._max_sbom_bytes + 1)
-        except (OSError, BotoCoreError, ClientError) as exc:
-            raise BackendQueryError(
-                f"[{self.name}] Failed reading S3 body for {key!r}: {exc}"
-            ) from exc
-        finally:
-            if callable(getattr(body, "close", None)):
-                body.close()
-
-        if not isinstance(raw, bytes) or len(raw) > self._max_sbom_bytes:
-            raise BackendQueryError(
-                f"[{self.name}] S3 object s3://{self._bucket}/{key} exceeds "
-                f"limit {self._max_sbom_bytes} bytes."
-            )
-        return raw
+        self._index = load_s3_sbom_prefix(
+            self._client,
+            bucket=self._bucket,
+            prefix=self._prefix,
+            suffixes=self._suffixes,
+            backend_name=self.name,
+            max_objects=self._max_objects,
+            max_pages=self._max_pages,
+            max_sbom_bytes=self._max_sbom_bytes,
+            strict=self._strict,
+            skip_archived=self._skip_archived,
+            expected_bucket_owner=self._expected_bucket_owner,
+            max_concurrency=self._max_concurrency,
+        )
+        return len(self._index.components)
 
     def find_components(self, queries: Sequence[PackageQuery]) -> tuple[InventoryComponent, ...]:
         """Search indexed S3 CycloneDX/SPDX SBOM components for package matches."""

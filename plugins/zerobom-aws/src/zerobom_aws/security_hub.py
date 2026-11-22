@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import os
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-import boto3
-from botocore.config import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError
 from packageurl import PackageURL
 
@@ -19,6 +16,8 @@ from zerobom.backends import (
 )
 from zerobom.backends._http import (
     DEFAULT_API_TIMEOUT_SECONDS,
+    MAX_API_URL_LENGTH,
+    parse_bool_opt,
     parse_float_opt,
     parse_int_opt,
     parse_optional_str_opt,
@@ -34,9 +33,14 @@ from zerobom.backends.sbom_parser import (
     make_inventory_component,
 )
 from zerobom.models import AssetRef, InventoryComponent, PackageQuery
-
-_AWS_REGION_RE = re.compile(r"^[a-z]{2}(?:-[a-z]+)+-[0-9]+$")
-_AWS_ACCOUNT_RE = re.compile(r"^[0-9]{12}$")
+from zerobom_aws._session import (
+    build_aws_client,
+    resolve_env_aws_region,
+    validate_aws_account_ids,
+    validate_aws_org_id,
+    validate_aws_ou_ids,
+    validate_aws_region,
+)
 
 _GENERIC_PACKAGE_TYPES: frozenset[str] = frozenset(
     {"", "library", "application", "operating-system", "os", "binary"}
@@ -71,17 +75,26 @@ _PACKAGE_TYPE_TO_ECOSYSTEM: dict[str, str] = {
     "apk": "apk",
     "alpine": "apk",
 }
+_SAFE_PEP503_RE = re.compile(r"[-_.]+")
 
 _ALLOWED_CONFIG_KEYS: frozenset[str] = frozenset(
     {
         "region_name",
         "profile_name",
+        "role_arn",
+        "external_id",
+        "role_session_name",
+        "endpoint_url",
+        "allow_insecure_http",
         "account_ids",
+        "organization_id",
+        "organizational_unit_ids",
         "resource_types",
         "package_types",
         "max_results",
         "max_pages",
         "max_software_entries",
+        "max_retries",
         "timeout_seconds",
     }
 )
@@ -90,15 +103,19 @@ _ALLOWED_CONFIG_KEYS: frozenset[str] = frozenset(
 def _lookup_names_for_query(query: PackageQuery) -> tuple[str, ...]:
     """Generate Security Hub ``PackageName`` lookup candidates for a canonical query."""
     candidates: list[str] = [query.name]
+    if query.ecosystem == "pypi":
+        candidates.append(query.name.replace("_", "-"))
+        candidates.append(query.name.replace("-", "_"))
+        candidates.append(_SAFE_PEP503_RE.sub("-", query.name.lower()))
     if query.namespace:
         if query.ecosystem == "maven":
             candidates.append(f"{query.namespace}:{query.name}")
-        elif query.ecosystem in {"npm", "golang"}:
+        elif query.ecosystem in {"npm", "golang", "composer"}:
             candidates.append(f"{query.namespace}/{query.name}")
     seen: set[str] = set()
     ordered: list[str] = []
     for cand in candidates:
-        if cand not in seen:
+        if cand and cand not in seen:
             seen.add(cand)
             ordered.append(cand)
     return tuple(ordered)
@@ -127,7 +144,7 @@ def _build_concrete_purl(
     purl_name = pkg_name
     if ecosystem_hint == "maven" and ":" in pkg_name and purl_ns is None:
         purl_ns, _, purl_name = pkg_name.partition(":")
-    elif ecosystem_hint in {"npm", "golang"} and "/" in pkg_name and purl_ns is None:
+    elif ecosystem_hint in {"npm", "golang", "composer"} and "/" in pkg_name and purl_ns is None:
         purl_ns, _, purl_name = pkg_name.rsplit("/", 1)
     try:
         return str(
@@ -145,56 +162,59 @@ class AwsSecurityHubBackend:
         *,
         region_name: str | None = None,
         profile_name: str | None = None,
+        role_arn: str | None = None,
+        external_id: str | None = None,
+        role_session_name: str = "zerobom-securityhub",
+        endpoint_url: str | None = None,
+        allow_insecure_http: bool = False,
         account_ids: Sequence[str] = (),
+        organization_id: str | None = None,
+        organizational_unit_ids: Sequence[str] = (),
         resource_types: Sequence[str] = (),
         package_types: Sequence[str] = (),
         max_results: int = 100,
         max_pages: int = 50,
         max_software_entries: int = 200,
+        max_retries: int = 3,
         timeout_seconds: float = DEFAULT_API_TIMEOUT_SECONDS,
         client: Any | None = None,
     ) -> None:
         """Initialize an AWS Security Hub v2 software inventory backend.
 
         Args:
-            region_name: AWS Region hosting Security Hub (falls back to ``AWS_REGION`` or SDK
-                default profile resolution).
+            region_name: AWS Region hosting Security Hub.
             profile_name: Optional AWS shared config/credentials profile name.
+            role_arn: Optional IAM role ARN assumed via STS ``AssumeRole``.
+            external_id: Optional STS ``ExternalId`` paired with ``role_arn``.
+            role_session_name: STS session identifier used when assuming ``role_arn``.
+            endpoint_url: Optional custom AWS or LocalStack endpoint URL.
+            allow_insecure_http: Allow ``http://`` custom endpoints for local testing only.
             account_ids: Optional 12-digit AWS account IDs to filter queried software/resources.
+            organization_id: Optional AWS Organizations ID (``o-...``) for delegated admins.
+            organizational_unit_ids: Optional OU IDs (``ou-...``) for delegated admins.
             resource_types: Optional Security Hub resource types (e.g., ``AwsEc2Instance``).
             package_types: Optional Security Hub package types (e.g., ``application``, ``library``).
             max_results: Per-page ``MaxResults`` limit in ``1..100``.
             max_pages: Maximum paginated ``NextToken`` hops per query in ``1..500``.
             max_software_entries: Maximum distinct ``SoftwareResult`` tuples expanded via
                 ``GetSoftwareResourcesV2`` per ``find_components`` batch (``1..2000``).
+            max_retries: Bounded adaptive botocore retry attempts in ``0..10``.
             timeout_seconds: Botocore connect/read timeout in ``0.5..120.0`` seconds.
             client: Optional pre-built boto3 Security Hub client (for tests/mocking).
 
         Raises:
-            BackendConfigError: If AWS regions, account IDs, or numeric limits are invalid.
+            BackendConfigError: If AWS regions, account IDs, Org scopes, SDK support, or numeric
+                limits are invalid.
         """
-        self._region_name: str | None = None
-        if region_name is not None:
-            cleaned_region = validate_no_control_chars(
-                region_name, field_name="region_name", max_length=64
-            )
-            if not _AWS_REGION_RE.fullmatch(cleaned_region):
-                raise BackendConfigError(f"Invalid AWS region_name: {region_name!r}.")
-            self._region_name = cleaned_region
-
+        self._region_name = validate_aws_region(region_name)
         self._profile_name: str | None = (
             validate_no_control_chars(profile_name, field_name="profile_name", max_length=128)
             if profile_name is not None
             else None
         )
-
-        validated_accounts: list[str] = []
-        for raw_acc in account_ids:
-            acc = validate_no_control_chars(raw_acc, field_name="account_ids", max_length=12)
-            if not _AWS_ACCOUNT_RE.fullmatch(acc):
-                raise BackendConfigError(f"Invalid 12-digit AWS account_id: {raw_acc!r}.")
-            validated_accounts.append(acc)
-        self._account_ids = tuple(validated_accounts)
+        self._account_ids = validate_aws_account_ids(account_ids)
+        self._organization_id = validate_aws_org_id(organization_id)
+        self._organizational_unit_ids = validate_aws_ou_ids(organizational_unit_ids)
 
         self._resource_types = tuple(
             validate_no_control_chars(rt, field_name="resource_types", max_length=128)
@@ -214,41 +234,62 @@ class AwsSecurityHubBackend:
         self._max_software_entries = validate_bounded_int(
             max_software_entries, field_name="max_software_entries", min_value=1, max_value=2000
         )
+        self._max_retries = validate_bounded_int(
+            max_retries, field_name="max_retries", min_value=0, max_value=10
+        )
         self._timeout_seconds = validate_timeout_seconds(timeout_seconds)
 
         if client is not None:
             self._client = client
             self._owns_client = False
         else:
-            session = boto3.Session(
+            self._client = build_aws_client(
+                "securityhub",
                 region_name=self._region_name,
                 profile_name=self._profile_name,
+                role_arn=role_arn,
+                external_id=external_id,
+                role_session_name=role_session_name,
+                endpoint_url=endpoint_url,
+                allow_insecure_http=allow_insecure_http,
+                timeout_seconds=self._timeout_seconds,
+                max_retries=self._max_retries,
             )
-            boto_cfg = BotoConfig(
-                connect_timeout=self._timeout_seconds,
-                read_timeout=self._timeout_seconds,
-                retries={"max_attempts": 3, "mode": "standard"},
-            )
-            self._client = session.client("securityhub", config=boto_cfg)
             self._owns_client = True
+
+        if not callable(getattr(self._client, "get_software_v2", None)) or not callable(
+            getattr(self._client, "get_software_resources_v2", None)
+        ):
+            raise BackendConfigError(
+                "AwsSecurityHubBackend requires boto3/botocore >= 1.44.0 with "
+                "Security Hub V2 Software APIs (GetSoftwareV2 / GetSoftwareResourcesV2)."
+            )
 
     @classmethod
     def from_config(cls, config: Mapping[str, Any]) -> AwsSecurityHubBackend:
         """Instantiate :class:`AwsSecurityHubBackend` from CLI options or YAML/JSON config."""
         reject_unknown_config_keys(config, _ALLOWED_CONFIG_KEYS, backend_name="aws_security_hub")
-        region = parse_optional_str_opt(config, "region_name", max_length=64)
-        if region is None:
-            raw_env_region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
-            if raw_env_region and raw_env_region.strip():
-                region = validate_no_control_chars(
-                    raw_env_region, field_name="AWS_REGION", max_length=64
-                )
+        region = resolve_env_aws_region(
+            parse_optional_str_opt(config, "region_name", max_length=64)
+        )
 
         return cls(
             region_name=region,
             profile_name=parse_optional_str_opt(config, "profile_name", max_length=128),
+            role_arn=parse_optional_str_opt(config, "role_arn", max_length=512),
+            external_id=parse_optional_str_opt(config, "external_id", max_length=1224),
+            role_session_name=parse_optional_str_opt(config, "role_session_name", max_length=64)
+            or "zerobom-securityhub",
+            endpoint_url=parse_optional_str_opt(
+                config, "endpoint_url", max_length=MAX_API_URL_LENGTH
+            ),
+            allow_insecure_http=parse_bool_opt(config, "allow_insecure_http", default=False),
             account_ids=parse_str_list_opt(
                 config, "account_ids", max_items=100, max_item_length=12
+            ),
+            organization_id=parse_optional_str_opt(config, "organization_id", max_length=40),
+            organizational_unit_ids=parse_str_list_opt(
+                config, "organizational_unit_ids", max_items=50, max_item_length=80
             ),
             resource_types=parse_str_list_opt(
                 config, "resource_types", max_items=50, max_item_length=128
@@ -263,6 +304,7 @@ class AwsSecurityHubBackend:
             max_software_entries=parse_int_opt(
                 config, "max_software_entries", default=200, min_value=1, max_value=2000
             ),
+            max_retries=parse_int_opt(config, "max_retries", default=3, min_value=0, max_value=10),
             timeout_seconds=parse_float_opt(
                 config,
                 "timeout_seconds",
@@ -288,8 +330,20 @@ class AwsSecurityHubBackend:
         """Return a redacted summary without exposing AWS credentials."""
         return (
             f"AwsSecurityHubBackend(region_name={self._region_name!r}, "
-            f"accounts={len(self._account_ids)}, max_results={self._max_results})"
+            f"accounts={len(self._account_ids)}, org={self._organization_id!r}, "
+            f"max_results={self._max_results})"
         )
+
+    def _build_scopes_payload(self) -> dict[str, Any] | None:
+        """Construct ``Scopes.AwsOrganizations`` filter when configured."""
+        org_entries: list[dict[str, str]] = []
+        if self._organization_id is not None:
+            org_entries.append({"OrganizationId": self._organization_id})
+        for ou_id in self._organizational_unit_ids:
+            org_entries.append({"OrganizationalUnitId": ou_id})
+        if not org_entries:
+            return None
+        return {"AwsOrganizations": org_entries}
 
     def _build_scope_filters(self) -> list[dict[str, Any]]:
         """Construct Security Hub v2 composite scope filters for account/resource/package."""
@@ -359,15 +413,16 @@ class AwsSecurityHubBackend:
         seen_software: set[tuple[str, str, str]] = set()
         expanded_entries = 0
         scope_filters = self._build_scope_filters()
+        org_scopes = self._build_scopes_payload()
 
         for lookup_name, matching_queries in lookup_to_queries.items():
-            software_items = self._paginate_software(lookup_name, scope_filters)
+            software_items = self._paginate_software(lookup_name, scope_filters, org_scopes)
 
             for sw in software_items:
                 pkg_name = clean_optional_str(sw.get("PackageName"))
                 pkg_ver = clean_optional_str(sw.get("PackageVersion"))
-                pkg_type = clean_optional_str(sw.get("PackageType")) or ""
-                if pkg_name is None or pkg_ver is None:
+                pkg_type = clean_optional_str(sw.get("PackageType"))
+                if pkg_name is None or pkg_ver is None or pkg_type is None:
                     continue
                 if sw.get("ResourceCount") == 0:
                     continue
@@ -405,9 +460,10 @@ class AwsSecurityHubBackend:
 
                 resources = self._paginate_software_resources(
                     package_name=pkg_name,
-                    package_type=pkg_type or "library",
+                    package_type=pkg_type,
                     package_version=pkg_ver,
                     scope_filters=scope_filters,
+                    org_scopes=org_scopes,
                 )
                 for res in resources:
                     comp = self._resource_to_component(
@@ -427,6 +483,7 @@ class AwsSecurityHubBackend:
         self,
         lookup_name: str,
         scope_filters: list[dict[str, Any]],
+        org_scopes: dict[str, Any] | None,
     ) -> list[dict[str, Any]]:
         """Paginate ``GetSoftwareV2`` up to ``max_pages``."""
         composite = [
@@ -452,6 +509,8 @@ class AwsSecurityHubBackend:
                 },
                 "MaxResults": self._max_results,
             }
+            if org_scopes is not None:
+                kwargs["Scopes"] = org_scopes
             if next_token is not None:
                 kwargs["NextToken"] = next_token
 
@@ -483,6 +542,7 @@ class AwsSecurityHubBackend:
         package_type: str,
         package_version: str,
         scope_filters: list[dict[str, Any]],
+        org_scopes: dict[str, Any] | None,
     ) -> list[dict[str, Any]]:
         """Paginate ``GetSoftwareResourcesV2`` up to ``max_pages``."""
         resources: list[dict[str, Any]] = []
@@ -500,6 +560,8 @@ class AwsSecurityHubBackend:
                     "CompositeFilters": scope_filters,
                     "CompositeOperator": "AND",
                 }
+            if org_scopes is not None:
+                kwargs["Scopes"] = org_scopes
             if next_token is not None:
                 kwargs["NextToken"] = next_token
 

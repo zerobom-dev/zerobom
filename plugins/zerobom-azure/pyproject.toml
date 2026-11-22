@@ -29,6 +29,7 @@ classifiers = [
 dependencies = [
     "zerobom>=0.1.0,<0.2.0",
     "httpx>=0.27",
+    "azure-identity>=1.19",
 ]
 
 [project.urls]
@@ -38,9 +39,7 @@ Repository = "https://github.com/zerobom-dev/zerobom"
 Issues = "https://github.com/zerobom-dev/zerobom/issues"
 
 [project.optional-dependencies]
-identity = [
-    "azure-identity>=1.19",
-]
+identity = []
 
 [project.entry-points."zerobom.backends"]
 azure_resource_graph = "zerobom_azure.resource_graph:AzureResourceGraphBackend"
@@ -48,3 +47,11 @@ azure_blob_sbom = "zerobom_azure.blob_sbom:AzureBlobSbomBackend"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/zerobom_azure"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src/zerobom_azure",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]

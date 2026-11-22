@@ -157,7 +157,7 @@ jobs:
       - name: Sync workspace and test cloud plugins
         run: |
           uv sync --locked --all-extras
-          uv run pytest tests/test_cloud_plugins.py -v
+          uv run pytest tests/test_cloud_plugins.py tests/test_cloud_resilience.py -v
 
       - name: Verify plugins git tag matches plugin versions
         if: startsWith(github.ref, 'refs/tags/plugins-v')
@@ -177,26 +177,82 @@ jobs:
       - name: Build cloud plugin wheels and sdists
         run: |
           rm -rf dist-plugins
-          mkdir -p dist-plugins
-          uv build --out-dir dist-plugins plugins/zerobom-aws
-          uv build --out-dir dist-plugins plugins/zerobom-gcp
-          uv build --out-dir dist-plugins plugins/zerobom-azure
+          mkdir -p dist-plugins/zerobom-aws dist-plugins/zerobom-gcp dist-plugins/zerobom-azure
+          uv build --out-dir dist-plugins/zerobom-aws plugins/zerobom-aws
+          uv build --out-dir dist-plugins/zerobom-gcp plugins/zerobom-gcp
+          uv build --out-dir dist-plugins/zerobom-azure plugins/zerobom-azure
+
+      - name: Verify plugin archives and isolated wheel compatibility against core
+        run: |
+          python3 - <<'PY'
+          import pathlib, tarfile, zipfile
+          dist_dir = pathlib.Path("dist-plugins")
+          expected_pkgs = {"zerobom_aws", "zerobom_azure", "zerobom_gcp"}
+          wheels = sorted(dist_dir.rglob("*.whl"))
+          sdists = sorted(dist_dir.rglob("*.tar.gz"))
+          assert len(wheels) == 3, f"Expected 3 plugin wheels, got {wheels}"
+          assert len(sdists) == 3, f"Expected 3 plugin sdists, got {sdists}"
+          seen_pkgs = set()
+          for whl in wheels:
+              pkg = whl.name.split("-", 1)[0]
+              seen_pkgs.add(pkg)
+              with zipfile.ZipFile(whl) as zf:
+                  names = set(zf.namelist())
+                  assert f"{pkg}/py.typed" in names, f"Missing py.typed in {whl}"
+                  assert any(n.endswith(".dist-info/entry_points.txt") for n in names), f"Missing entry_points.txt in {whl}"
+          assert seen_pkgs == expected_pkgs, f"Unexpected packages: {seen_pkgs}"
+          for sdist in sdists:
+              with tarfile.open(sdist) as tf:
+                  sdist_names = tf.getnames()
+                  for forbidden in ("AGENTS.md", ".cache", ".venv", ".env", "benchmarks/"):
+                      assert not any(forbidden in entry for entry in sdist_names), f"Unexpected {forbidden!r} in {sdist}"
+          PY
+          SMOKE_CORE="$(mktemp -d)"
+          SMOKE_VENV="$(mktemp -d)"
+          SMOKE_CWD="$(mktemp -d)"
+          uv build --out-dir "$SMOKE_CORE" .
+          uv venv "$SMOKE_VENV"
+          uv pip install --python "$SMOKE_VENV/bin/python" "$SMOKE_CORE"/zerobom-*.whl dist-plugins/*/*.whl
+          (
+            cd "$SMOKE_CWD"
+            OUT="$("$SMOKE_VENV/bin/zerobom" backends)"
+            echo "$OUT"
+            "$SMOKE_VENV/bin/python" -c '
+          import sys
+          backends = set(sys.argv[1].splitlines())
+          required = {
+              "local_sbom", "dependency_track", "oci_sbom", "k8s_sbom",
+              "aws_security_hub", "aws_inspector_sbom", "s3_sbom",
+              "gcp_artifact_analysis", "gcs_sbom",
+              "azure_resource_graph", "azure_blob_sbom",
+          }
+          missing = required - backends
+          assert not missing, f"Missing backends: {missing}"
+          import boto3, google.auth.transport.requests, azure.identity
+          ' "$OUT"
+          )
+          rm -rf "$SMOKE_CORE" "$SMOKE_VENV" "$SMOKE_CWD"
 
       - name: Upload verified cloud plugin distributions
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: zerobom-plugins-dist
-          path: dist-plugins/*
+          path: dist-plugins
 
   publish-plugins-pypi:
-    name: Publish Cloud Plugins to PyPI (OIDC Trusted Publishing)
+    name: Publish zerobom-${{ matrix.plugin }} to PyPI (OIDC Trusted Publishing)
     if: startsWith(github.ref, 'refs/tags/plugins-v')
     needs: build-and-verify-plugins
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: [aws, gcp, azure]
     permissions:
       id-token: write
     environment:
-      name: pypi
+      name: pypi-${{ matrix.plugin }}
+      url: https://pypi.org/p/zerobom-${{ matrix.plugin }}
     steps:
       - name: Download verified cloud plugin distributions
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -204,7 +260,7 @@ jobs:
           name: zerobom-plugins-dist
           path: dist-plugins
 
-      - name: Publish cloud plugin packages via PyPI OIDC
+      - name: Publish zerobom-${{ matrix.plugin }} via PyPI OIDC
         uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
         with:
-          packages-dir: dist-plugins/
+          packages-dir: dist-plugins/zerobom-${{ matrix.plugin }}/

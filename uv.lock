@@ -591,6 +591,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/5e/78/1c31250140faba4206c557b2bb16e8b1f1e42202864f0dbe0a8f4bc8dab2/google_auth-2.63.0-py3-none-any.whl", hash = "sha256:cbc065325f67511946d1a66672e4f47e71ed162ef1abd2bb8404ceec407c86ba", size = 270723, upload-time = "2026-11-20T23:23:59.008Z" },
 ]
 
+[package.optional-dependencies]
+requests = [
+    { name = "requests" },
+]
+
 [[package]]
 name = "griffelib"
 version = "2.4.1"
@@ -2285,7 +2290,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "boto3", specifier = ">=1.35" },
+    { name = "boto3", specifier = ">=1.44.0" },
     { name = "zerobom", editable = "." },
 ]
 
@@ -2294,18 +2299,14 @@ name = "zerobom-azure"
 version = "0.1.0"
 source = { editable = "plugins/zerobom-azure" }
 dependencies = [
+    { name = "azure-identity" },
     { name = "httpx" },
     { name = "zerobom" },
 ]
 
-[package.optional-dependencies]
-identity = [
-    { name = "azure-identity" },
-]
-
 [package.metadata]
 requires-dist = [
-    { name = "azure-identity", marker = "extra == 'identity'", specifier = ">=1.19" },
+    { name = "azure-identity", specifier = ">=1.19" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "zerobom", editable = "." },
 ]
@@ -2316,18 +2317,14 @@ name = "zerobom-gcp"
 version = "0.1.0"
 source = { editable = "plugins/zerobom-gcp" }
 dependencies = [
+    { name = "google-auth", extra = ["requests"] },
     { name = "httpx" },
     { name = "zerobom" },
 ]
 
-[package.optional-dependencies]
-adc = [
-    { name = "google-auth" },
-]
-
 [package.metadata]
 requires-dist = [
-    { name = "google-auth", marker = "extra == 'adc'", specifier = ">=2.35" },
+    { name = "google-auth", extras = ["requests"], specifier = ">=2.35" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "zerobom", editable = "." },
 ]

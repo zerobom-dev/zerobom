@@ -98,7 +98,7 @@ def _spdx_bytes(name: str, version: str, purl: str) -> bytes:
 
 
 class TestCloudPluginDiscovery:
-    def test_registry_discovers_all_ten_built_in_and_workspace_backends(self) -> None:
+    def test_registry_discovers_all_eleven_built_in_and_workspace_backends(self) -> None:
         discovered = set(BackendRegistry().list_backends())
         expected = {
             "local_sbom",
@@ -106,6 +106,7 @@ class TestCloudPluginDiscovery:
             "oci_sbom",
             "k8s_sbom",
             "aws_security_hub",
+            "aws_inspector_sbom",
             "s3_sbom",
             "gcp_artifact_analysis",
             "gcs_sbom",
@@ -189,9 +190,13 @@ class TestAwsPlugins:
             )
 
         # Conformance executes: raw_candidates, vuln_matches, safe_matches, unmatched, repeat.
+        # Unmatched PyPI dashed package queries both hyphenated and underscored variants.
         _queue_requests_hit()
         _queue_requests_hit()
         _queue_requests_hit()
+        stubber.add_response(
+            "get_software_v2", {"Software": []}, {"Filters": ANY, "MaxResults": 100}
+        )
         stubber.add_response(
             "get_software_v2", {"Software": []}, {"Filters": ANY, "MaxResults": 100}
         )
@@ -381,7 +386,9 @@ class TestAwsPlugins:
         )
 
         with stubber:
-            backend = S3SbomBackend(bucket="corp-sec-sboms", prefix="sboms/", client=raw_s3)
+            backend = S3SbomBackend(
+                bucket="corp-sec-sboms", prefix="sboms/", max_concurrency=1, client=raw_s3
+            )
             case = build_default_conformance_case(backend_name="s3_sbom")
             matches = assert_backend_conformance(backend, case)
             assert len(matches) == 1

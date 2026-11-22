@@ -1,0 +1,84 @@
+name: Cloud Storage Emulators
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "plugins/**"
+      - "tests/test_cloud_emulators.py"
+      - ".github/workflows/cloud-emulators.yml"
+  pull_request:
+    paths:
+      - "plugins/**"
+      - "tests/test_cloud_emulators.py"
+      - ".github/workflows/cloud-emulators.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-emulators-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  emulator-integration:
+    name: Real-Wire Storage Emulators (LocalStack, GCS, Azurite)
+    runs-on: ubuntu-latest
+    services:
+      localstack:
+        image: localstack/localstack:4.0
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: s3
+          AWS_DEFAULT_REGION: us-east-1
+      fake-gcs:
+        image: fsouza/fake-gcs-server:1.52
+        ports:
+          - 4443:4443
+      azurite:
+        image: mcr.microsoft.com/azure-storage/azurite:3.33.0
+        ports:
+          - 10000:10000
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up uv and Python 3.12
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install project dependencies and cloud plugins
+        run: uv sync --locked --all-extras
+
+      - name: Wait for cloud storage emulators and run wire tests
+        env:
+          ZEROBOM_EMULATOR_S3_URL: http://127.0.0.1:4566
+          ZEROBOM_EMULATOR_GCS_URL: https://127.0.0.1:4443
+          ZEROBOM_EMULATOR_AZBLOB_URL: http://127.0.0.1:10000/devstoreaccount1
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          uv run python - <<'PY'
+          import time, httpx
+          for name, url in (
+              ("LocalStack", "http://127.0.0.1:4566/_localstack/health"),
+              ("fake-gcs-server", "https://127.0.0.1:4443/storage/v1/b"),
+              ("Azurite", "http://127.0.0.1:10000/devstoreaccount1?comp=list"),
+          ):
+              for _ in range(30):
+                  try:
+                      httpx.get(url, timeout=2.0, verify=False)
+                      print(f"{name} ready")
+                      break
+                  except httpx.HTTPError:
+                      time.sleep(1.0)
+              else:
+                  raise RuntimeError(f"Timed out waiting for {name}")
+          PY
+          uv run pytest tests/test_cloud_emulators.py -v

@@ -171,6 +171,14 @@ class TestZensicalDocsAndCommunityAssets:
         assert "/src/zerobom" in sdist_include
         assert not any("AGENTS" in item or "plugins" in item for item in sdist_include)
 
+        for plugin_dir in ("zerobom-aws", "zerobom-gcp", "zerobom-azure"):
+            p_toml = tomllib.loads(
+                (REPO_ROOT / "plugins" / plugin_dir / "pyproject.toml").read_text(encoding="utf-8")
+            )
+            p_include = p_toml["tool"]["hatch"]["build"]["targets"]["sdist"]["include"]
+            assert any(item.startswith("/src/") for item in p_include)
+            assert "/README.md" in p_include and "/LICENSE" in p_include
+
         for placeholder_check in (
             REPO_ROOT / "pyproject.toml",
             REPO_ROOT / "README.md",
@@ -209,7 +217,13 @@ class TestZensicalDocsAndCommunityAssets:
                 assert sha_pin_re.match(step["uses"]), f"Unpinned action: {step['uses']!r}"
 
         workflows_dir = REPO_ROOT / ".github" / "workflows"
-        for wf_name in ("zerobom-ci.yml", "docs.yml", "render-demo.yml", "release.yml"):
+        for wf_name in (
+            "zerobom-ci.yml",
+            "cloud-emulators.yml",
+            "docs.yml",
+            "render-demo.yml",
+            "release.yml",
+        ):
             wf_path = workflows_dir / wf_name
             assert wf_path.is_file()
             wf = yaml.safe_load(wf_path.read_text(encoding="utf-8"))
