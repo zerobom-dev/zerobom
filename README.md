@@ -1,23 +1,41 @@
-# zerobom
+# ZeroBOM
 
 > **Hunt CVE-less and pre-CVE vulnerabilities published in security blogs against your software inventories before NVD or OSV publishes an entry.**
 
+<div align="center">
+
 [![CI](https://img.shields.io/github/actions/workflow/status/zerobom-dev/zerobom/zerobom-ci.yml?branch=main&label=CI)](https://github.com/zerobom-dev/zerobom/actions/workflows/zerobom-ci.yml)
+[![Live Pre-CVE Feed](https://img.shields.io/badge/live%20pre--CVE%20feed-zerobom.dev%2Flive-0F766E)](https://zerobom.dev/live)
 [![Docs](https://img.shields.io/github/actions/workflow/status/zerobom-dev/zerobom/docs.yml?branch=main&label=docs)](https://docs.zerobom.dev/)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![PyPI - zerobom](https://img.shields.io/pypi/v/zerobom?label=PyPI%20zerobom)](https://pypi.org/project/zerobom/)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![Standards: OSV 1.6.7 & SARIF 2.1.0](https://img.shields.io/badge/standards-OSV%201.6.7%20%7C%20SARIF%202.1.0-brightgreen.svg)](docs/architecture.md)
 
-[![PyPI - zerobom](https://img.shields.io/pypi/v/zerobom?label=PyPI%20zerobom)](https://pypi.org/project/zerobom/)
-[![PyPI - zerobom-aws](https://img.shields.io/pypi/v/zerobom-aws?label=PyPI%20zerobom-aws)](https://pypi.org/project/zerobom-aws/)
-[![PyPI - zerobom-gcp](https://img.shields.io/pypi/v/zerobom-gcp?label=PyPI%20zerobom-gcp)](https://pypi.org/project/zerobom-gcp/)
-[![PyPI - zerobom-azure](https://img.shields.io/pypi/v/zerobom-azure?label=PyPI%20zerobom-azure)](https://pypi.org/project/zerobom-azure/)
+</div>
 
-`zerobom` bridges the window between **security blog disclosure** (Google Project Zero, Wiz Research, Trail of Bits, Datadog Security Labs, vendor blogs) and **official CVE/NVD indexing**—isolating the LLM strictly to raw text extraction while keeping quote grounding, package resolution, and version-range matching 100% deterministic.
+`ZeroBOM` bridges the window between **security blog disclosure** (Google Project Zero, Wiz Research, Trail of Bits, Datadog Security Labs, vendor blogs) and **official CVE/NVD indexing**—isolating the LLM strictly to raw text extraction while keeping quote grounding, package resolution, and version-range matching 100% deterministic.
 
 The LLM is a narrow, replaceable **~15% extraction layer**. Every extracted claim is grounded verbatim in source text, validated against canonical Package URLs and optional package registries, compiled into **OSV 1.6.7-compatible JSON**, and matched deterministically against your CycloneDX, SPDX, container, Kubernetes, or cloud software inventories using [`univers`](https://github.com/aboutcode-org/univers) ecosystem version math.
 
 ![zerobom offline demo](docs/assets/demo-preview.svg)
+
+---
+
+## Live Pre-CVE Vulnerability Feed
+
+See `zerobom` running in production at **[zerobom.dev/live](https://zerobom.dev/live)** — an automated public portal polling our curated research feeds every 6 hours, compiling verified 0-day / pre-CVE disclosures into **OSV 1.6.7 JSON**, and tracking when NVD or OSV.dev later assigns an official CVE.
+
+- **Browse Live Detections:** [zerobom.dev/live](https://zerobom.dev/live) (`AUTO`-verified advisories `>= 0.75` + opt-in `TRIAGE` queue)
+- **Machine-Readable Feed:** [zerobom.dev/feed.json](https://zerobom.dev/feed.json) & per-advisory OSV files at `https://zerobom.dev/osv/<PRECVE-ID>.json`
+- **Monitored Research Sources:** [zerobom.dev/sources](https://zerobom.dev/sources) (synced directly from [`sources.yaml`](sources.yaml))
+
+Scan your own SBOM against any live published advisory with zero LLM calls:
+
+```bash
+curl -sL https://zerobom.dev/osv/<PRECVE-ID>.json -o advisory.json
+zerobom scan --osv advisory.json --sbom sbom.cdx.json
+```
 
 ---
 
