@@ -22,13 +22,13 @@ The LLM is a narrow, replaceable **~15% extraction layer**. Every extracted clai
 
 ---
 
-## Live Pre-CVE Vulnerability Feed
+## 📡 Live Pre-CVE Vulnerability Feed
 
 See `zerobom` running in production at **[zerobom.dev/live](https://zerobom.dev/live)** — an automated public portal polling our curated research feeds every 6 hours, compiling verified 0-day / pre-CVE disclosures into **OSV 1.6.7 JSON**, and tracking when NVD or OSV.dev later assigns an official CVE.
 
-- **Browse Live Detections:** [zerobom.dev/live](https://zerobom.dev/live) (`AUTO`-verified advisories `>= 0.75` + opt-in `TRIAGE` queue)
-- **Machine-Readable Feed:** [zerobom.dev/feed.json](https://zerobom.dev/feed.json) & per-advisory OSV files at `https://zerobom.dev/osv/<PRECVE-ID>.json`
-- **Monitored Research Sources:** [zerobom.dev/sources](https://zerobom.dev/sources) (synced directly from [`sources.yaml`](sources.yaml))
+- 🔍 **Browse Live Detections:** [zerobom.dev/live](https://zerobom.dev/live) (`AUTO`-verified advisories `>= 0.75` + opt-in `TRIAGE` queue)
+- 📦 **Machine-Readable Feed:** [zerobom.dev/feed.json](https://zerobom.dev/feed.json) & per-advisory OSV files at `https://zerobom.dev/osv/<PRECVE-ID>.json`
+- 📰 **Monitored Research Sources:** [zerobom.dev/sources](https://zerobom.dev/sources) (synced directly from [`sources.yaml`](sources.yaml))
 
 Scan your own SBOM against any live published advisory with zero LLM calls:
 
@@ -39,7 +39,7 @@ zerobom scan --osv advisory.json --sbom sbom.cdx.json
 
 ---
 
-## 60-Second Quickstart (Zero API Keys Required)
+## ⚡ 60-Second Quickstart (Zero API Keys Required)
 
 Run the wheel-bundled offline demonstration using [`uv`](https://docs.astral.sh/uv/):
 
@@ -53,7 +53,7 @@ What happens inside `zerobom demo`:
 2. **Grounds quotes verbatim** and blocks the generic unnamespaced `utils` package claim.
 3. Compiles **OSV `PRECVE-2026-7DA3A045`** (non-official local deterministic ID prefix) and matches the bundled CycloneDX SBOM via both canonical PURL (`pkg:pypi/requests@2.30.0`) and Debian binary `?upstream=openssl` metadata (`libssl1.1@1.1.1n-0+deb11u4` on `Debian:11`).
 
-### Common Workflows
+### 🛠️ Common Workflows
 
 ```bash
 # Pure deterministic zero-LLM scan against OSV JSON + CycloneDX/SPDX SBOM
@@ -73,7 +73,7 @@ zerobom backends
 
 ---
 
-## Why Not Another LLM Security Wrapper?
+## 🧠 Why Not Another LLM Security Wrapper?
 
 ```mermaid
 flowchart LR
@@ -88,15 +88,15 @@ flowchart LR
     G --> H["Outputs & Alerting\n(SARIF 2.1.0, GitHub Issues,\nWebhook, Slack + Approve Worker)"]
 ```
 
-- **LLMs never compare versions.** All version ranges (`SemVer`, `PEP 440`, `Maven`, `Go`, `Debian dpkg`, `RPM`, `Alpine`, `Cargo`, `RubyGems`, `NuGet`, `Composer`) execute inside `univers` + OSV `"0"` sentinel range logic. Standard package ecosystems validate against OSV 1.6.7 using the non-official local prefix `PRECVE-YYYY-XXXXXXXX`; `Generic` runtimes and vendor streams such as `CloudLinux` are `zerobom` ecosystem extensions.
-- **Verbatim quote grounding.** Every claim must include an exact/normalized `evidence_quote` verified in the fetched article body alongside left/right boundary-checked package and version tokens.
-- **No hallucinated packages.** Fuzzy names resolve to canonical ASCII Package URLs (`pkg:pypi/requests`), generic names (`core`, `utils`, `app`) without explicit package namespaces fail closed, and `--verify-registry` confirms existence against PyPI/npm/Maven/Go without following redirects (capping upstream registry lookup errors at `TRIAGE`).
-- **Two-axis credibility routing:** `composite_score = source_tier_weight * extraction_specificity`:
-  - `>= 0.75` (`AUTO`): Queries SBOM inventory automatically and alerts only when vulnerable hits > 0 (weak quotes, unbounded zero-days, and registry errors are capped `<= 0.70`).
-  - `0.50 – 0.74` (`TRIAGE`): Holds in SQLite triage queue / Slack review until human approval.
-  - `< 0.50` (`DROP`): Suppresses silently.
+- 🔢 **LLMs never compare versions.** All version ranges (`SemVer`, `PEP 440`, `Maven`, `Go`, `Debian dpkg`, `RPM`, `Alpine`, `Cargo`, `RubyGems`, `NuGet`, `Composer`) execute inside `univers` + OSV `"0"` sentinel range logic. Standard package ecosystems validate against OSV 1.6.7 using the non-official local prefix `PRECVE-YYYY-XXXXXXXX`; `Generic` runtimes and vendor streams such as `CloudLinux` are `zerobom` ecosystem extensions.
+- 📌 **Verbatim quote grounding.** Every claim must include an exact/normalized `evidence_quote` verified in the fetched article body alongside left/right boundary-checked package and version tokens.
+- 🛡️ **No hallucinated packages.** Fuzzy names resolve to canonical ASCII Package URLs (`pkg:pypi/requests`), generic names (`core`, `utils`, `app`) without explicit package namespaces fail closed, and `--verify-registry` confirms existence against PyPI/npm/Maven/Go without following redirects (capping upstream registry lookup errors at `TRIAGE`).
+- ⚖️ **Two-axis credibility routing:** `composite_score = source_tier_weight * extraction_specificity`:
+  - 🟢 `>= 0.75` (`AUTO`): Queries SBOM inventory automatically and alerts only when vulnerable hits > 0 (weak quotes, unbounded zero-days, and registry errors are capped `<= 0.70`).
+  - 🟡 `0.50 – 0.74` (`TRIAGE`): Holds in SQLite triage queue / Slack review until human approval.
+  - 🔴 `< 0.50` (`DROP`): Suppresses silently.
 
-### How `zerobom` Fits Alongside Existing Scanners
+### 🔄 How `zerobom` Fits Alongside Existing Scanners
 
 `zerobom` is an **upstream pre-CVE discovery and OSV compilation feeder**, not a replacement for authoritative CVE scanners:
 
@@ -109,7 +109,7 @@ flowchart LR
 
 ---
 
-## Benchmark Results
+## 📊 Benchmark Results
 
 Full methodology, 95% confidence bounds, known blind spots, and per-case breakdowns live in [`benchmarks/REPORT.md`](benchmarks/REPORT.md) (archived `v0.1.0` live run: [`benchmarks/results/live-eval-summary.json`](benchmarks/results/live-eval-summary.json) and [`benchmarks/results/live-eval-report.md`](benchmarks/results/live-eval-report.md)).
 
@@ -134,11 +134,11 @@ uv run python benchmarks/run_evals.py --mode offline
 
 ---
 
-## Pluggable Inventory Backends (`zerobom.backends`)
+## 🔌 Pluggable Inventory Backends (`zerobom.backends`)
 
 Core `zerobom` has **zero cloud vendor dependencies**. Enterprise & cloud integrations load lazily via standard Python `zerobom.backends` entry points (`zerobom[aws|gcp|azure]` companion cloud packages publish alongside core via `plugins-v*` tags):
 
-### Published Packages (PyPI)
+### 📦 Published Packages (PyPI)
 
 | Distribution | Install Extra | Included Backends | PyPI Status |
 | --- | --- | --- | --- |
@@ -165,7 +165,7 @@ Want to add a custom inventory backend? Follow [Authoring `zerobom.backends` Inv
 
 ---
 
-## Drop-In GitHub Action & SecOps Alerting
+## 🚀 Drop-In GitHub Action & SecOps Alerting
 
 Use [`action.yml`](action.yml) in scheduled CI security scans to upload SARIF to GitHub Code Scanning or sync idempotent GitHub Issues:
 
@@ -197,13 +197,13 @@ jobs:
           llm-api-key: ${{ secrets.ZEROBOM_LLM_API_KEY }}
 ```
 
-- **Human-in-the-loop Slack / Webhook Triage:** Run `zerobom triage-worker` (signed HTTP `X-Slack-Signature` callback server or optional Socket Mode with `zerobom[slack]`) alongside `zerobom triage list|show|approve|reject`. See [Alerting & Triage](docs/alerting-and-triage.md).
+- 💬 **Human-in-the-loop Slack / Webhook Triage:** Run `zerobom triage-worker` (signed HTTP `X-Slack-Signature` callback server or optional Socket Mode with `zerobom[slack]`) alongside `zerobom triage list|show|approve|reject`. See [Alerting & Triage](docs/alerting-and-triage.md).
 
 ---
 
-## Documentation & Community
+## 📚 Documentation & Community
 
-- **Documentation:** [Getting Started](docs/getting-started.md) · [Architecture & Security](docs/architecture.md) · [Backends](docs/backends.md) · [Alerting & Triage](docs/alerting-and-triage.md) · [GitHub Action](docs/github-action.md) · [Benchmarks](docs/benchmarks.md) · [Plugin Authoring](docs/PLUGIN_AUTHORING.md)
-- **Contribute in 1 Minute:** Add a security blog to [`sources.yaml`](sources.yaml), submit a benchmark fixture, or contribute a backend plugin—see [`CONTRIBUTING.md`](CONTRIBUTING.md).
-- **Security Policy:** See [`SECURITY.md`](SECURITY.md) for responsible disclosure and security boundaries.
-- **License:** [Apache-2.0](LICENSE)
+- 📖 **Documentation:** [Getting Started](docs/getting-started.md) · [Architecture & Security](docs/architecture.md) · [Backends](docs/backends.md) · [Alerting & Triage](docs/alerting-and-triage.md) · [GitHub Action](docs/github-action.md) · [Benchmarks](docs/benchmarks.md) · [Plugin Authoring](docs/PLUGIN_AUTHORING.md)
+- 🤝 **Contribute in 1 Minute:** Add a security blog to [`sources.yaml`](sources.yaml), submit a benchmark fixture, or contribute a backend plugin—see [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- 🔒 **Security Policy:** See [`SECURITY.md`](SECURITY.md) for responsible disclosure and security boundaries.
+- 📄 **License:** [Apache-2.0](LICENSE)
