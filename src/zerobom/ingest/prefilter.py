@@ -30,60 +30,185 @@ _ALIAS_EXTRACTORS: tuple[tuple[re.Pattern[str], bool], ...] = (
 
 # Simple non-backtracking patterns used prior to LLM extraction.
 _VULN_SIGNAL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("zero_day", re.compile(r"\b(?:0-day|zero-day|zero day)\b", re.I)),
+    ("zero_day", re.compile(r"\b(?:0-day|zero-day|zero day|actively exploited)\b", re.I)),
     ("vulnerability", re.compile(r"\bvulnerabilit(?:y|ies)\b", re.I)),
-    ("rce", re.compile(r"\b(?:rce|(?:remote|arbitrary) code execution)\b", re.I)),
-    ("dos", re.compile(r"\b(?:denial[- ]of[- ]service|redos|infinite loop)\b", re.I)),
-    ("ssrf", re.compile(r"\b(?:ssrf|server-side request forgery)\b", re.I)),
-    ("xss", re.compile(r"\b(?:xss|cross-site scripting|open redirect)\b", re.I)),
-    ("sqli", re.compile(r"\b(?:sqli|sql injection)\b", re.I)),
-    ("prototype_pollution", re.compile(r"\bprototype pollution\b", re.I)),
-    ("path_traversal", re.compile(r"\b(?:path traversal|directory traversal)\b", re.I)),
+    ("rce", re.compile(r"\b(?:rce|(?:remote|arbitrary|unauthenticated) code execution)\b", re.I)),
     (
-        "auth_bypass",
-        re.compile(r"\b(?:authentication|authorization|allowlist|pin) bypass\b", re.I),
-    ),
-    ("priv_esc", re.compile(r"\bprivilege escalation\b", re.I)),
-    ("command_injection", re.compile(r"\b(?:command injection|os command injection)\b", re.I)),
-    ("deserialization", re.compile(r"\bdeserialization\b", re.I)),
-    (
-        "memory_corruption",
+        "dos",
         re.compile(
-            r"\b(?:use-after-free|buffer overflow|heap overflow|"
-            r"out[- ]of[- ]bounds|null pointer dereference)\b",
+            r"\b(?:denial[- ]of[- ]service|redos|infinite loop|resource exhaustion)\b",
             re.I,
         ),
     ),
-    ("info_disclosure", re.compile(r"\binformation disclosure\b", re.I)),
+    ("ssrf", re.compile(r"\b(?:ssrf|server-side request forgery)\b", re.I)),
+    ("xss", re.compile(r"\b(?:xss|cross-site scripting|open redirect)\b", re.I)),
+    ("sqli", re.compile(r"\b(?:sqli|sql injection|nosql injection|ldap injection)\b", re.I)),
+    ("request_smuggling", re.compile(r"\b(?:http )?request smuggling\b", re.I)),
+    (
+        "xxe_ssti",
+        re.compile(r"\b(?:xxe|xml external entity|ssti|server-side template injection)\b", re.I),
+    ),
+    ("prototype_pollution", re.compile(r"\bprototype pollution\b", re.I)),
+    (
+        "path_traversal",
+        re.compile(
+            r"\b(?:path traversal|directory traversal|"
+            r"arbitrary file (?:read|write|overwrite|upload))\b",
+            re.I,
+        ),
+    ),
+    (
+        "auth_bypass",
+        re.compile(
+            r"\b(?:authentication|authorization|access control|allowlist|pin|mfa|sso|rbac) "
+            r"bypass\b|\bunauthenticated access\b|"
+            r"\b(?:jwt|oauth|oidc|saml) (?:bypass|forgery|confusion|spoofing)\b",
+            re.I,
+        ),
+    ),
+    (
+        "priv_esc",
+        re.compile(r"\b(?:privilege escalation|lpe|container escape|sandbox escape)\b", re.I),
+    ),
+    (
+        "command_injection",
+        re.compile(r"\b(?:command injection|os command injection|code injection)\b", re.I),
+    ),
+    ("deserialization", re.compile(r"\b(?:unsafe |insecure )?deserialization\b", re.I)),
+    ("race_condition", re.compile(r"\b(?:race condition|toctou)\b", re.I)),
+    (
+        "credentials",
+        re.compile(
+            r"\b(?:hardcoded (?:credential|password|secret|key)|"
+            r"credential (?:leak|exposure))\b",
+            re.I,
+        ),
+    ),
+    (
+        "supply_chain",
+        re.compile(
+            r"\b(?:supply[- ]chain|malicious package|dependency confusion|typosquatting)\b",
+            re.I,
+        ),
+    ),
+    (
+        "memory_corruption",
+        re.compile(
+            r"\b(?:use-after-free|buffer overflow|heap overflow|stack overflow|"
+            r"out[- ]of[- ]bounds|null pointer dereference|integer overflow|type confusion)\b",
+            re.I,
+        ),
+    ),
+    (
+        "info_disclosure",
+        re.compile(r"\b(?:information disclosure|sensitive data exposure)\b", re.I),
+    ),
     (
         "security_advisory",
         re.compile(
             r"\b(?:security advisory|security bulletin|security alert|"
-            r"security release|security notice|security warning|advisory)\b",
+            r"security release|security notice|security warning|security update|advisory)\b",
             re.I,
         ),
     ),
     ("cwe", re.compile(r"\bCWE-\d{1,5}\b", re.I)),
-    ("exploit_poc", re.compile(r"\b(?:poc|proof of concept|exploit)\b", re.I)),
-    ("remediation", re.compile(r"\b(?:patched in|fixed in|upgrade to)\b", re.I)),
+    ("exploit_poc", re.compile(r"\b(?:poc|proof of concept|exploit(?:ed|ation)?)\b", re.I)),
+    (
+        "remediation",
+        re.compile(r"\b(?:patched in|fixed in|upgrade to|security (?:fix|patch))\b", re.I),
+    ),
 )
 
 _SOFTWARE_SIGNAL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("version_literal", re.compile(r"(?<![a-z0-9])v?\d+\.\d+(?:\.\d+)?(?![a-z0-9])", re.I)),
+    (
+        "version_literal",
+        re.compile(r"(?<![a-z0-9])v?\d+\.\d+(?:\.\d+)?(?:-[a-z0-9.]+)?(?![a-z0-9])", re.I),
+    ),
     (
         "version_range",
-        re.compile(r"\b(?:prior to|before|affected versions?|versions? <)\b", re.I),
+        re.compile(
+            r"\b(?:prior to|before|affected versions?)\b|"
+            r"\bversions?\s*(?:<=?|(?:prior|before|through|up to)\b)",
+            re.I,
+        ),
     ),
     (
         "ecosystem",
         re.compile(
-            r"\b(?:pypi|pip|npm|node\.js|maven|golang|debian|ubuntu|alpine|rpm|"
-            r"crates\.io|cargo|rubygems|nuget|packagist)\b",
+            r"\b(?:pypi|pip|npm|node\.js|maven|gradle|golang|go module|debian|ubuntu|"
+            r"alpine|rhel|rpm|crates\.io|cargo|rubygems|nuget|packagist|composer|"
+            r"helm|oci|terraform|ansible)\b",
             re.I,
         ),
     ),
-    ("purl_or_repo", re.compile(r"(?:\bpkg:[a-z]+/|github\.com/[a-z0-9_.-]+/)", re.I)),
-    ("package_word", re.compile(r"\b(?:package|library|crate|module|dependency)\b", re.I)),
+    (
+        "purl_or_repo",
+        re.compile(r"(?:\bpkg:[a-z0-9._-]+/|github\.com/[a-z0-9_.-]+/[a-z0-9_.-]+)", re.I),
+    ),
+    (
+        "package_word",
+        re.compile(
+            r"\b(?:package|library|crate|module|dependency|container image|"
+            r"helm chart|terraform provider)\b",
+            re.I,
+        ),
+    ),
+    (
+        "enterprise_iam",
+        re.compile(
+            r"\b(?:keycloak|okta|authentik|ory (?:hydra|kratos)|freeipa|active directory|"
+            r"entra id|pingfederate|forgerock|cyberark|hashicorp (?:vault|boundary)|"
+            r"gravitational teleport)\b",
+            re.I,
+        ),
+    ),
+    (
+        "cloud_native_k8s",
+        re.compile(
+            r"\b(?:kubernetes|k8s|kubelet|kube-apiserver|etcd|containerd|runc|docker|podman|"
+            r"istio|cilium|calico|coredns|ingress-nginx|cert-manager|external-secrets|"
+            r"rancher|openshift|k3s)\b",
+            re.I,
+        ),
+    ),
+    (
+        "cicd_devops",
+        re.compile(
+            r"\b(?:gitlab|github actions|jenkins|argocd|argo workflows|fluxcd|teamcity|"
+            r"atlassian bamboo|artifactory|jfrog|sonatype nexus|goharbor|sonarqube|"
+            r"apache airflow|prefect)\b",
+            re.I,
+        ),
+    ),
+    (
+        "enterprise_middleware_web",
+        re.compile(
+            r"\b(?:nginx|envoy|haproxy|traefik|kong gateway|caddy server|apache http|"
+            r"tomcat|jetty|wildfly|spring boot|spring framework|spring security|struts|"
+            r"log4j|jackson|netty|grpc|graphql|asp\.net|django|fastapi|flask|"
+            r"ruby on rails|laravel|php-fpm)\b|(?<!\w)\.net(?:\s+core)?\b",
+            re.I,
+        ),
+    ),
+    (
+        "data_messaging_observability",
+        re.compile(
+            r"\b(?:postgresql|postgres|mysql|mariadb|mongodb|redis|valkey|elasticsearch|"
+            r"opensearch|apache kafka|kafka|rabbitmq|nats|clickhouse|snowflake|"
+            r"apache spark|apache flink|grafana|prometheus|grafana loki|opentelemetry|"
+            r"splunk|wazuh)\b",
+            re.I,
+        ),
+    ),
+    (
+        "enterprise_edge_vpn",
+        re.compile(
+            r"\b(?:fortinet|fortios|fortigate|palo alto|pan-os|globalprotect|ivanti|"
+            r"pulse secure|citrix|netscaler|f5 big-ip|big-ip|cisco asa|ios xe|"
+            r"juniper|junos|sophos|check point|vmware|vsphere|esxi|vcenter)\b",
+            re.I,
+        ),
+    ),
 )
 
 _MARKETING_SIGNAL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (

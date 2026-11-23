@@ -673,6 +673,73 @@ class TestPrefilter:
         assert is_valid_advisory_alias("ghsa-2345-CFGH-jmpq") == "GHSA-2345-cfgh-jmpq"
         assert is_valid_advisory_alias("NOT-AN-ID-123") is None
 
+    def test_expanded_enterprise_vuln_and_software_signals_and_guards(self) -> None:
+        smuggling_dotnet = RawArticle(
+            url="https://research.example.org/dotnet-smuggling",
+            title="HTTP Request Smuggling and JWT Bypass in .NET Core and Keycloak",
+            body=(
+                "Researchers demonstrated request smuggling against Envoy and .NET Core "
+                "for versions < 8.0.12 alongside a Keycloak JWT bypass."
+            ),
+            source_name="Research Lab",
+            source_tier=SourceTier.TIER_1,
+            published_at=PUBLISHED_AT,
+        )
+        res_net = prefilter_article(smuggling_dotnet)
+        assert res_net.passed is True
+        assert "request_smuggling" in res_net.vuln_signals
+        assert "auth_bypass" in res_net.vuln_signals
+        assert "enterprise_middleware_web" in res_net.software_signals
+        assert "enterprise_iam" in res_net.software_signals
+        assert "version_range" in res_net.software_signals
+
+        k8s_edge = RawArticle(
+            url="https://research.example.org/k8s-fortios",
+            title="Actively Exploited Container Escape in Kubernetes and FortiOS",
+            body=(
+                "An actively exploited container escape in containerd affects Kubernetes "
+                "clusters and FortiOS appliances running unpatched builds."
+            ),
+            source_name="Research Lab",
+            source_tier=SourceTier.TIER_1,
+            published_at=PUBLISHED_AT,
+        )
+        res_k8s = prefilter_article(k8s_edge)
+        assert res_k8s.passed is True
+        assert {"zero_day", "priv_esc"}.issubset(set(res_k8s.vuln_signals))
+        assert {"cloud_native_k8s", "enterprise_edge_vpn"}.issubset(set(res_k8s.software_signals))
+
+        # Regression guard: a single CVE mention must NOT double-count into 2 vuln_signals.
+        webinar_with_cve = RawArticle(
+            url="https://vendor.example.org/webinar-recap",
+            title="Register now for our live webinar mentioning CVE-2026-99999",
+            body="Join our live webinar and visit our RSA Conference booth after Series B funding.",
+            source_name="Vendor Blog",
+            source_tier=SourceTier.UNKNOWN,
+            published_at=PUBLISHED_AT,
+        )
+        res_webinar = prefilter_article(webinar_with_cve)
+        assert res_webinar.vuln_signals == ("cve",)
+        assert res_webinar.software_signals == ()
+        assert res_webinar.passed is False
+
+        # Regression guard: routine product bugfix with prose words ("fixed in", "chart", "vault")
+        # must not accidentally trigger both vuln and software gates simultaneously.
+        routine_changelog = RawArticle(
+            url="https://vendor.example.org/changelog",
+            title="Dashboard UI Improvements and Chart Rendering Fixes",
+            body=(
+                "Minor layout alignment issues were fixed in the analytics chart and dark vault "
+                "theme boundary view."
+            ),
+            source_name="Vendor Blog",
+            source_tier=SourceTier.UNKNOWN,
+            published_at=PUBLISHED_AT,
+        )
+        res_changelog = prefilter_article(routine_changelog)
+        assert res_changelog.software_signals == ()
+        assert res_changelog.passed is False
+
 
 class TestPreReleaseSecurityRegressions:
     def test_rejects_utf16_le_and_be_entity_expansion_xml(self) -> None:
