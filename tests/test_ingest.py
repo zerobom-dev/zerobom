@@ -740,6 +740,84 @@ class TestPrefilter:
         assert res_changelog.software_signals == ()
         assert res_changelog.passed is False
 
+    def test_ai_llm_infrastructure_signals_and_prompt_essay_guard(self) -> None:
+        litellm_sqli = RawArticle(
+            url="https://research.example.org/litellm-sqli",
+            title="Unauthenticated SQL Injection in LiteLLM Proxy",
+            body=(
+                "An unauthenticated SQL injection in LiteLLM allows attackers to read keys "
+                "and escalate privileges."
+            ),
+            source_name="Research Lab",
+            source_tier=SourceTier.TIER_1,
+            published_at=PUBLISHED_AT,
+        )
+        res_litellm = prefilter_article(litellm_sqli)
+        assert res_litellm.passed is True
+        assert "sqli" in res_litellm.vuln_signals
+        assert "ai_llm_serving" in res_litellm.software_signals
+
+        mcp_cmd = RawArticle(
+            url="https://research.example.org/mcp-rce",
+            title="OS Command Injection in Popular MCP Server",
+            body=(
+                "Security researchers disclosed an OS command injection vulnerability in a "
+                "Model Context Protocol mcp-server built with FastMCP."
+            ),
+            source_name="Research Lab",
+            source_tier=SourceTier.TIER_1,
+            published_at=PUBLISHED_AT,
+        )
+        res_mcp = prefilter_article(mcp_cmd)
+        assert res_mcp.passed is True
+        assert "command_injection" in res_mcp.vuln_signals
+        assert "ai_llm_agents_rag" in res_mcp.software_signals
+
+        open_webui = RawArticle(
+            url="https://research.example.org/open-webui-ssrf",
+            title="SSRF Flaw in Open WebUI",
+            body="An SSRF flaw in Open WebUI exposes cloud instance metadata.",
+            source_name="Research Lab",
+            source_tier=SourceTier.TIER_1,
+            published_at=PUBLISHED_AT,
+        )
+        res_webui = prefilter_article(open_webui)
+        assert res_webui.passed is True
+        assert "ssrf" in res_webui.vuln_signals
+        assert "ai_llm_agents_rag" in res_webui.software_signals
+
+        # Guardrail: general prompt-injection / AI webinar essays lacking software vuln signals
+        # must still drop cleanly.
+        prompt_essay = RawArticle(
+            url="https://blog.example.org/prompt-injection-essay",
+            title="Why Prompt Injection Remains Hard for Enterprise AI in 2026",
+            body=(
+                "Indirect prompt injection and jailbreak defenses remain challenging when "
+                "building RAG workflows with LangChain or LiteLLM."
+            ),
+            source_name="AI Blog",
+            source_tier=SourceTier.UNKNOWN,
+            published_at=PUBLISHED_AT,
+        )
+        res_essay = prefilter_article(prompt_essay)
+        assert res_essay.vuln_signals == ()
+        assert res_essay.passed is False
+
+        ai_webinar = RawArticle(
+            url="https://vendor.example.org/litellm-webinar",
+            title="Register now for our LiteLLM cost governance webinar!",
+            body=(
+                "Join our live webinar after our Series B funding to learn how we deploy "
+                "LiteLLM and vLLM."
+            ),
+            source_name="Vendor Blog",
+            source_tier=SourceTier.UNKNOWN,
+            published_at=PUBLISHED_AT,
+        )
+        res_webinar = prefilter_article(ai_webinar)
+        assert res_webinar.vuln_signals == ()
+        assert res_webinar.passed is False
+
 
 class TestPreReleaseSecurityRegressions:
     def test_rejects_utf16_le_and_be_entity_expansion_xml(self) -> None:

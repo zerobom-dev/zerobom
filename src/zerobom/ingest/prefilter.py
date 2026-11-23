@@ -209,6 +209,28 @@ _SOFTWARE_SIGNAL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             re.I,
         ),
     ),
+    (
+        "ai_llm_serving",
+        re.compile(
+            r"\b(?:litellm|vllm|ollama|llama\.cpp|llama-cpp-python|sglang|bentoml|"
+            r"torchserve|localai|triton inference server|text-generation-inference|"
+            r"mlflow|kubeflow|kserve|ray (?:serve|cluster|dashboard)|"
+            r"pytorch|tensorflow|keras|onnxruntime|huggingface_hub|safetensors|"
+            r"jupyter|jupyterlab|jupyterhub)\b",
+            re.I,
+        ),
+    ),
+    (
+        "ai_llm_agents_rag",
+        re.compile(
+            r"\b(?:langchain|langgraph|langflow|langserve|langfuse|llamaindex|llama-index|"
+            r"flowise|dify|n8n|open[- ]webui|anythingllm|librechat|lobechat|chainlit|"
+            r"comfyui|gradio|streamlit|crewai|autogen|pydantic-ai|semantic kernel|"
+            r"model context protocol|mcp[- ]server|fastmcp|"
+            r"qdrant|weaviate|milvus|chromadb|pgvector)\b",
+            re.I,
+        ),
+    ),
 )
 
 _MARKETING_SIGNAL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
