@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "zerobom"
-version = "0.1.0"
+version = "0.1.1"
 description = "Deterministic pre-CVE security advisory verification and OSV compilation engine."
 readme = "README.md"
 license = "Apache-2.0"

@@ -89,12 +89,37 @@ ECOSYSTEM_ALIASES: dict[str, tuple[str, str]] = {
     "mariner": ("rpm", "Azure Linux"),
     "wolfi": ("apk", "Wolfi"),
     "chainguard": ("apk", "Chainguard"),
+    "github": ("github", "GitHub"),
     "generic": ("generic", "Generic"),
 }
 
 _DISTRO_PURL_TYPES: frozenset[str] = frozenset({"deb", "rpm", "apk"})
 _RUNTIME_FRIENDLY_PURL_TYPES: frozenset[str] = _DISTRO_PURL_TYPES | {"generic"}
 _DISTRO_NAMESPACE_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+_NON_DISTRO_NAMESPACE_BLOCKLIST: frozenset[str] = frozenset(
+    {
+        "apache",
+        "nginx",
+        "gnu",
+        "mozilla",
+        "php",
+        "python",
+        "ruby",
+        "node",
+        "nodejs",
+        "npm",
+        "pypi",
+        "maven",
+        "golang",
+        "cargo",
+        "gem",
+        "nuget",
+        "composer",
+        "github",
+        "generic",
+        "upstream",
+    }
+)
 _DISTRO_OSV_BY_NAMESPACE: dict[str, str] = {
     "debian": "Debian",
     "ubuntu": "Ubuntu",
@@ -190,6 +215,20 @@ GENERIC_PACKAGE_BLOCKLIST: frozenset[str] = frozenset(
         "driver",
         "script",
         "scripts",
+        "firmware",
+        "software",
+        "hardware",
+        "device",
+        "router",
+        "bootloader",
+        "browser",
+        "model",
+        "llm",
+        "ai",
+        "daemon",
+        "endpoint",
+        "dashboard",
+        "console",
     }
 )
 
@@ -228,6 +267,10 @@ _NPM_SCOPE_RE = re.compile(r"^@[a-z0-9._-]+$")
 _NPM_NAME_RE = re.compile(r"^[a-z0-9._-]+$")
 _MAVEN_COORD_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 _GO_SEGMENT_RE = re.compile(r"^[A-Za-z0-9._~+-]+$")
+_CARGO_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+_GEM_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_NUGET_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_COMPOSER_PART_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _FORBIDDEN_COORD_CHARS: frozenset[str] = frozenset({"\\", "?", "#", "'", '"', ";"})
 
 
@@ -533,7 +576,7 @@ class RegistryChecker(Protocol):
 
 
 class HttpRegistryChecker:
-    """HTTP-based package existence verifier for PyPI, npm, Maven Central, and Go proxy."""
+    """HTTP-based package existence verifier for 8 upstream package registries."""
 
     def __init__(
         self,
@@ -693,6 +736,54 @@ class HttpRegistryChecker:
                     return RegistryStatus.NOT_FOUND
                 return self._status_from_http_code(resp.status_code)
 
+            if parsed.type == "cargo":
+                if not _validate_coordinate_safety(parsed.name) or not _CARGO_NAME_RE.match(
+                    parsed.name
+                ):
+                    return RegistryStatus.SKIPPED
+                url = f"https://crates.io/api/v1/crates/{quote(parsed.name, safe='')}"
+                resp = self._client.get(url)
+                return self._status_from_http_code(resp.status_code)
+
+            if parsed.type == "gem":
+                if not _validate_coordinate_safety(parsed.name) or not _GEM_NAME_RE.match(
+                    parsed.name
+                ):
+                    return RegistryStatus.SKIPPED
+                url = f"https://rubygems.org/api/v1/gems/{quote(parsed.name, safe='')}.json"
+                resp = self._client.get(url)
+                return self._status_from_http_code(resp.status_code)
+
+            if parsed.type == "nuget":
+                lowered_name = parsed.name.lower()
+                if not _validate_coordinate_safety(parsed.name) or not _NUGET_NAME_RE.match(
+                    parsed.name
+                ):
+                    return RegistryStatus.SKIPPED
+                encoded_name = quote(lowered_name, safe="")
+                url = f"https://api.nuget.org/v3-flatcontainer/{encoded_name}/index.json"
+                resp = self._client.get(url)
+                return self._status_from_http_code(resp.status_code)
+
+            if parsed.type == "composer":
+                if not parsed.namespace:
+                    return RegistryStatus.SKIPPED
+                lowered_ns = parsed.namespace.lower()
+                lowered_name = parsed.name.lower()
+                if (
+                    not _validate_coordinate_safety(lowered_ns)
+                    or not _validate_coordinate_safety(lowered_name)
+                    or not _COMPOSER_PART_RE.match(lowered_ns)
+                    or not _COMPOSER_PART_RE.match(lowered_name)
+                ):
+                    return RegistryStatus.SKIPPED
+                url = (
+                    f"https://repo.packagist.org/p2/{quote(lowered_ns, safe='')}/"
+                    f"{quote(lowered_name, safe='')}.json"
+                )
+                resp = self._client.get(url)
+                return self._status_from_http_code(resp.status_code)
+
             return RegistryStatus.SKIPPED
         except (httpx.HTTPError, ValueError, TypeError):
             return RegistryStatus.ERROR
@@ -760,6 +851,12 @@ def _split_namespace_and_name(
         if "/" in name:
             vendor, pkg = name.split("/", 1)
             return vendor.lower(), pkg.lower(), False
+        return (ns.lower() if ns else None), name.lower(), False
+
+    if purl_type == "github":
+        if "/" in name:
+            owner, repo = name.split("/", 1)
+            return owner.lower(), repo.lower(), False
         return (ns.lower() if ns else None), name.lower(), False
 
     # Flat PURL registries (cargo, gem, nuget) never carry namespaces in canonical PURLs.
@@ -922,7 +1019,7 @@ def resolve_purl(
     distro_ns_invalid = (
         purl_type in _DISTRO_PURL_TYPES
         and norm_ns is not None
-        and not _DISTRO_NAMESPACE_RE.match(norm_ns)
+        and (not _DISTRO_NAMESPACE_RE.match(norm_ns) or norm_ns in _NON_DISTRO_NAMESPACE_BLOCKLIST)
     )
     if (
         distro_ns_invalid

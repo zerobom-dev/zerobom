@@ -25,6 +25,7 @@ from zerobom.models import (
     _DISTRO_RELEASE_RE,
     ALLOWED_HTTP_SCHEMES,
     MAX_SUPPORTING_QUOTES,
+    ArticleType,
     ExtractedAdvisory,
     ExtractedPackageClaim,
     RawArticle,
@@ -41,6 +42,7 @@ MAX_LLM_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_RETRY_ASSISTANT_CHARS = 2048
 
 _CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```$", re.IGNORECASE | re.DOTALL)
+_CWE_ID_RE = re.compile(r"^CWE-[1-9]\d{0,4}$")
 _NULLISH_STRINGS: frozenset[str] = frozenset({"", "n/a", "na", "none", "null", "unknown"})
 
 
@@ -130,6 +132,56 @@ def _parse_severity(raw: Any) -> VulnerabilitySeverity:
         return VulnerabilitySeverity(candidate)
     except ValueError:
         return VulnerabilitySeverity.UNKNOWN
+
+
+def _parse_article_type(raw: Any) -> ArticleType | None:
+    """Map raw LLM ``article_type`` strings safely to :class:`ArticleType` or ``None``."""
+    cleaned = _clean_optional_text(raw)
+    if cleaned is None:
+        return None
+    try:
+        return ArticleType(cleaned.lower())
+    except ValueError:
+        return None
+
+
+def _ground_aliases(raw_aliases: Any, *, grounding_corpus: str) -> tuple[str, ...]:
+    """Validate and deduplicate advisory aliases verbatim against ``grounding_corpus``."""
+    if not isinstance(raw_aliases, list):
+        return ()
+    grounded: list[str] = []
+    for alias in raw_aliases:
+        if not isinstance(alias, str):
+            continue
+        canonical_alias = is_valid_advisory_alias(alias)
+        if canonical_alias is None:
+            continue
+        # Zero-trust alias grounding: keep only valid IDs actually present in the article.
+        if canonical_alias.casefold() not in grounding_corpus:
+            continue
+        if canonical_alias not in grounded:
+            grounded.append(canonical_alias)
+    return tuple(grounded)
+
+
+def _ground_cwe_ids(raw_cwes: Any, *, grounding_corpus: str) -> tuple[str, ...]:
+    """Validate and ground ``CWE-*`` identifiers strictly against ``grounding_corpus``."""
+    if not isinstance(raw_cwes, list):
+        return ()
+    cwes: list[str] = []
+    for item in raw_cwes:
+        if not isinstance(item, str):
+            continue
+        val = item.strip().upper()
+        if not _CWE_ID_RE.match(val):
+            continue
+        # Require verbatim CWE presence with boundary guards to block schema copying.
+        cwe_pat = rf"(?<![a-z0-9]){re.escape(val.casefold())}(?![0-9])"
+        if re.search(cwe_pat, grounding_corpus) is None:
+            continue
+        if val not in cwes:
+            cwes.append(val)
+    return tuple(cwes)
 
 
 def _parse_constraints(raw_constraints: Any) -> tuple[VersionConstraint, ...]:
@@ -223,6 +275,8 @@ def _normalize_advisory_payload(
     if not isinstance(raw_claims, list):
         raise ValueError("'claims' must be a JSON array.")
 
+    grounding_corpus = f"{article.title}\n{article.body}\n{article.url}".casefold()
+
     claims: list[ExtractedPackageClaim] = []
     for item in raw_claims:
         if not isinstance(item, dict):
@@ -244,6 +298,10 @@ def _normalize_advisory_payload(
                 version_constraints=_parse_constraints(item.get("version_constraints")),
                 evidence_quote=raw_quote,
                 supporting_quotes=_parse_supporting_quotes(item.get("supporting_quotes")),
+                claim_aliases=_ground_aliases(
+                    item.get("claim_aliases", ()),
+                    grounding_corpus=grounding_corpus,
+                ),
                 fix_commit_url=_clean_optional_uri(item.get("fix_commit_url")),
                 poc_url=_clean_optional_uri(item.get("poc_url")),
             )
@@ -257,30 +315,11 @@ def _normalize_advisory_payload(
             if cleaned_ref is not None and cleaned_ref not in refs:
                 refs.append(cleaned_ref)
 
-    raw_cwes = payload.get("cwe_ids", [])
-    cwes: list[str] = []
-    if isinstance(raw_cwes, list):
-        for c in raw_cwes:
-            if isinstance(c, str) and c.strip():
-                val = c.strip().upper()
-                if val not in cwes:
-                    cwes.append(val)
-
-    grounding_corpus = f"{article.title}\n{article.body}\n{article.url}".casefold()
-    merged_aliases: list[str] = []
-    raw_aliases = payload.get("known_aliases", [])
-    if isinstance(raw_aliases, list):
-        for alias in raw_aliases:
-            if not isinstance(alias, str):
-                continue
-            canonical_alias = is_valid_advisory_alias(alias)
-            if canonical_alias is None:
-                continue
-            # Zero-trust alias grounding: keep only valid IDs actually present in the article.
-            if canonical_alias.casefold() not in grounding_corpus:
-                continue
-            if canonical_alias not in merged_aliases:
-                merged_aliases.append(canonical_alias)
+    cwes = _ground_cwe_ids(payload.get("cwe_ids", []), grounding_corpus=grounding_corpus)
+    merged_aliases = _ground_aliases(
+        payload.get("known_aliases", []),
+        grounding_corpus=grounding_corpus,
+    )
 
     title = _clean_optional_text(payload.get("title")) or article.title
     summary = _clean_optional_text(payload.get("summary")) or title
@@ -292,11 +331,12 @@ def _normalize_advisory_payload(
         title=title,
         summary=summary,
         details=details_str,
+        article_type=_parse_article_type(payload.get("article_type")),
         claims=tuple(claims),
         severity=_parse_severity(payload.get("severity")),
-        cwe_ids=tuple(cwes),
+        cwe_ids=cwes,
         references=tuple(refs),
-        known_aliases=tuple(merged_aliases),
+        known_aliases=merged_aliases,
         published_at=article.published_at,
         prompt_version=prompt_version,
         extractor_model=model_name,

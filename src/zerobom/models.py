@@ -132,6 +132,20 @@ class SourceTier(StrEnum):
     UNKNOWN = "unknown"
 
 
+class ArticleType(StrEnum):
+    """Classification of a fetched article's disclosure role prior to routing."""
+
+    ORIGINAL_DISCLOSURE = "original_disclosure"
+    VENDOR_ADVISORY = "vendor_advisory"
+    MALICIOUS_PACKAGE = "malicious_package"
+    KNOWN_VULN_ANALYSIS = "known_vuln_analysis"
+    RESEARCH_GUIDANCE = "research_guidance"
+    PRODUCT_ANNOUNCEMENT = "product_announcement"
+    BENCHMARK_EVALUATION = "benchmark_evaluation"
+    OFFENSIVE_TECHNIQUE = "offensive_technique"
+    NON_VULNERABILITY = "non_vulnerability"
+
+
 class FeedKind(StrEnum):
     """Discovery format configured for an allowlisted source endpoint."""
 
@@ -194,6 +208,8 @@ class RawArticle(StrictModel):
         source_name: Human-readable publisher name (e.g., ``"Project Zero"``).
         source_tier: Credibility tier weight category of the publisher.
         published_at: Publication timestamp.
+        published_at_inferred: True when ``published_at`` fell back to fetch time rather than an
+            explicit feed or HTML metadata date.
         fetched_at: Optional retrieval timestamp.
         author: Optional author attribution.
     """
@@ -204,6 +220,7 @@ class RawArticle(StrictModel):
     source_name: str
     source_tier: SourceTier = SourceTier.UNKNOWN
     published_at: datetime
+    published_at_inferred: bool = False
     fetched_at: datetime | None = None
     author: str | None = None
 
@@ -299,6 +316,8 @@ class ExtractedPackageClaim(StrictModel):
         version_constraints: Tuple of extracted version constraints.
         evidence_quote: Verbatim supporting quote copied from the source article.
         supporting_quotes: Optional additional verbatim quotes for multi-update advisories.
+        claim_aliases: Optional per-claim advisory aliases (e.g., CVE/GHSA IDs for multi-flaw
+            posts).
         fix_commit_url: Optional validated URI to a fix commit or PR.
         poc_url: Optional validated URI to a proof-of-concept or exploit writeup.
     """
@@ -310,6 +329,7 @@ class ExtractedPackageClaim(StrictModel):
     version_constraints: tuple[VersionConstraint, ...] = ()
     evidence_quote: str
     supporting_quotes: tuple[str, ...] = ()
+    claim_aliases: tuple[str, ...] = ()
     fix_commit_url: str | None = None
     poc_url: str | None = None
 
@@ -346,6 +366,11 @@ class ExtractedPackageClaim(StrictModel):
             cleaned.append(quote)
         return tuple(cleaned)
 
+    @field_validator("claim_aliases")
+    @classmethod
+    def _validate_claim_aliases(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(_require_safe_text(alias, "claim_aliases") for alias in value)
+
     @field_validator("fix_commit_url", "poc_url")
     @classmethod
     def _validate_optional_urls(cls, value: str | None, info: Any) -> str | None:
@@ -362,6 +387,7 @@ class ExtractedAdvisory(StrictModel):
         title: Non-empty advisory title.
         summary: Concise vulnerability summary.
         details: Extended technical writeup.
+        article_type: Optional disclosure-role classification emitted by the extractor.
         claims: Zero or more package vulnerability claims (empty for non-vuln posts).
         severity: Qualitative severity rating.
         cwe_ids: Associated CWE identifiers.
@@ -376,6 +402,7 @@ class ExtractedAdvisory(StrictModel):
     title: str
     summary: str
     details: str = ""
+    article_type: ArticleType | None = None
     claims: tuple[ExtractedPackageClaim, ...] = ()
     severity: VulnerabilitySeverity = VulnerabilitySeverity.UNKNOWN
     cwe_ids: tuple[str, ...] = ()
@@ -480,6 +507,7 @@ class FeedEntry(StrictModel):
         title: Post title.
         summary: Feed-level snippet/summary text.
         published_at: Publication timestamp.
+        published_at_inferred: True when the feed/index lacked a timestamp and fell back to now.
         source_name: Name of the parent feed.
         source_tier: Credibility tier inherited from the parent feed.
     """
@@ -488,6 +516,7 @@ class FeedEntry(StrictModel):
     title: str
     summary: str = ""
     published_at: datetime
+    published_at_inferred: bool = False
     source_name: str
     source_tier: SourceTier = SourceTier.UNKNOWN
 

@@ -36,6 +36,7 @@ from zerobom.models import (
     AssetRef,
     CredibilityReport,
     ExtractedAdvisory,
+    GroundingStatus,
     InventoryComponent,
     MatchResult,
     OsvAdvisory,
@@ -46,6 +47,7 @@ from zerobom.models import (
     OsvReference,
     PackageQuery,
     RawArticle,
+    RegistryStatus,
     RoutingDecision,
     VersionConstraint,
 )
@@ -373,6 +375,14 @@ def _build_interval_parsed_constraint(
         lo_ver = None if intro_clean == "0" else parse_ecosystem_version(ecosystem, intro_clean)
         if fixed is not None:
             fixed_clean = _normalize_bound_version(fixed, package_name)
+            if fixed_clean == "0":
+                return ParsedConstraint(
+                    events=(),
+                    exact_version=None,
+                    is_bounded=False,
+                    is_valid=False,
+                    reason="Upper fixed bound cannot be the OSV origin sentinel '0'.",
+                )
             hi_ver = parse_ecosystem_version(ecosystem, fixed_clean)
             if lo_ver is not None and lo_ver >= hi_ver:
                 return ParsedConstraint(
@@ -394,6 +404,14 @@ def _build_interval_parsed_constraint(
 
         if last_affected is not None:
             la_clean = _normalize_bound_version(last_affected, package_name)
+            if la_clean == "0":
+                return ParsedConstraint(
+                    events=(),
+                    exact_version=None,
+                    is_bounded=False,
+                    is_valid=False,
+                    reason="Upper last_affected bound cannot be the OSV origin sentinel '0'.",
+                )
             hi_ver = parse_ecosystem_version(ecosystem, la_clean)
             if lo_ver is not None and lo_ver > hi_ver:
                 return ParsedConstraint(
@@ -759,6 +777,88 @@ def validate_claim_versions(
     return all_valid, has_bounded, reasons
 
 
+def detect_overlapping_branch_ranges(
+    ecosystem: str | None,
+    constraints: Sequence[VersionConstraint],
+    *,
+    package_name: str | None = None,
+) -> tuple[bool, str | None]:
+    """Detect conflicting multi-branch intervals (e.g., multiple ``introduced="0"`` branches).
+
+    When a multi-branch advisory omits branch lower bounds and emits ``< 4.1.1 | < 3.0.24``,
+    the resulting ``introduced: "0"`` intervals cause patched older LTS releases (``3.0.24``)
+    to falsely match ``< 4.1.1``.
+
+    Args:
+        ecosystem: Canonical PURL ecosystem type or OSV ecosystem name.
+        constraints: Constraints belonging to one claim or merged ``(purl, ecosystem)`` group.
+        package_name: Optional canonical package name used to strip redundant NVR prefixes.
+
+    Returns:
+        Tuple ``(has_overlap, diagnostic_reason)``.
+    """
+    if ecosystem is None or not constraints:
+        return False, None
+
+    try:
+        _get_range_class(ecosystem)
+    except ValueError:
+        return False, None
+
+    # Tuple layout: (lo_str, lo_ver_or_none, hi_str, hi_ver, hi_is_inclusive, has_fixed_bound)
+    intervals: list[tuple[str, Any, str, Any, bool, bool]] = []
+    for item in constraints:
+        parsed = parse_version_constraint(ecosystem, item, package_name=package_name)
+        if not parsed.is_valid or len(parsed.events) != 2:
+            continue
+        intro_ev, close_ev = parsed.events[0], parsed.events[1]
+        if intro_ev.introduced is None:
+            continue
+        lo_str = intro_ev.introduced
+        hi_str = close_ev.fixed if close_ev.fixed is not None else close_ev.last_affected
+        if hi_str is None:
+            continue
+        try:
+            lo_ver = None if lo_str == "0" else parse_ecosystem_version(ecosystem, lo_str)
+            hi_ver = parse_ecosystem_version(ecosystem, hi_str)
+        except ValueError:
+            continue
+        intervals.append(
+            (
+                lo_str,
+                lo_ver,
+                hi_str,
+                hi_ver,
+                close_ev.last_affected is not None,
+                close_ev.fixed is not None,
+            )
+        )
+
+    if len(intervals) < 2:
+        return False, None
+
+    open_origin_uppers = {hi_str for lo_str, _, hi_str, _, _, _ in intervals if lo_str == "0"}
+    if len(open_origin_uppers) >= 2:
+        return True, (
+            "Multiple release branches share open-origin introduced='0' bounds, which "
+            "falsely flags patched older branches as vulnerable."
+        )
+
+    for idx_i, (lo_i, lo_ver_i, _hi_i, hi_ver_i, hi_inc_i, _is_fix_i) in enumerate(intervals):
+        for idx_j, (_lo_j, _lo_ver_j, hi_j, hi_ver_j, _hi_inc_j, is_fix_j) in enumerate(intervals):
+            if idx_i == idx_j or not is_fix_j:
+                continue
+            covers_lower = lo_ver_i is None or lo_ver_i <= hi_ver_j
+            covers_upper = (hi_ver_j <= hi_ver_i) if hi_inc_i else (hi_ver_j < hi_ver_i)
+            if covers_lower and covers_upper:
+                return True, (
+                    f"Version interval from {lo_i!r} overlaps another branch's fixed version "
+                    f"{hi_j!r}."
+                )
+
+    return False, None
+
+
 def canonicalize_url(url: str) -> str:
     """Canonicalize an article URL for deterministic advisory ID generation.
 
@@ -813,7 +913,7 @@ def _osv_package_name(purl_type: str, namespace: str | None, name: str) -> str:
     """Format package name according to OSV ecosystem conventions."""
     if purl_type == "maven":
         return f"{namespace}:{name}" if namespace else name
-    if purl_type in {"npm", "golang", "composer"}:
+    if purl_type in {"npm", "golang", "composer", "github"}:
         return f"{namespace}/{name}" if namespace else name
     return name
 
@@ -857,16 +957,22 @@ def compile_osv_advisory(
     if not report.accepted_claims:
         return None
 
-    # Prevent lower-confidence TRIAGE claims from piggybacking inside an AUTO advisory.
+    # Prevent lower-confidence, weakly grounded, or unbounded TRIAGE claims from piggybacking
+    # inside an AUTO advisory.
     if report.routing == RoutingDecision.AUTO:
         eligible_claims = tuple(
-            cr for cr in report.accepted_claims if cr.routing == RoutingDecision.AUTO
+            cr
+            for cr in report.accepted_claims
+            if cr.routing == RoutingDecision.AUTO
+            and cr.grounding.status == GroundingStatus.VERIFIED
+            and cr.has_bounded_version_range
         )
+        eligible_ids = {id(cr) for cr in eligible_claims}
         held_triage_purls = tuple(
             dict.fromkeys(
                 cr.purl.canonical_purl
                 for cr in report.accepted_claims
-                if cr.routing != RoutingDecision.AUTO and cr.purl.canonical_purl is not None
+                if id(cr) not in eligible_ids and cr.purl.canonical_purl is not None
             )
         )
     else:
@@ -952,14 +1058,43 @@ def compile_osv_advisory(
         if not ranges and not exact_versions:
             continue
 
+        worst_grounding = (
+            GroundingStatus.UNGROUNDED.value
+            if any(cr.grounding.status == GroundingStatus.UNGROUNDED for cr in group_claims)
+            else GroundingStatus.QUOTE_ONLY_WEAK.value
+            if any(cr.grounding.status == GroundingStatus.QUOTE_ONLY_WEAK for cr in group_claims)
+            else GroundingStatus.VERIFIED.value
+        )
+        agg_registry = (
+            RegistryStatus.EXISTS.value
+            if any(cr.purl.registry_status == RegistryStatus.EXISTS for cr in group_claims)
+            else RegistryStatus.ERROR.value
+            if any(cr.purl.registry_status == RegistryStatus.ERROR for cr in group_claims)
+            else RegistryStatus.SKIPPED.value
+        )
+        group_routing = (
+            RoutingDecision.AUTO.value
+            if all(cr.routing == RoutingDecision.AUTO for cr in group_claims)
+            else RoutingDecision.TRIAGE.value
+        )
+        group_aliases = list(
+            dict.fromkeys(alias for cr in group_claims for alias in cr.claim.claim_aliases)
+        )
+        aff_zerobom_meta: dict[str, Any] = {
+            "evidence_quotes": group_quotes,
+            "grounding_status": worst_grounding,
+            "registry_status": agg_registry,
+            "routing": group_routing,
+        }
+        if group_aliases:
+            aff_zerobom_meta["aliases"] = group_aliases
+
         affected_entries.append(
             OsvAffected(
                 package=pkg,
                 ranges=ranges,
                 versions=tuple(exact_versions),
-                database_specific=(
-                    {"zerobom": {"evidence_quotes": group_quotes}} if group_quotes else None
-                ),
+                database_specific={"zerobom": aff_zerobom_meta},
             )
         )
 
@@ -1008,6 +1143,15 @@ def compile_osv_advisory(
                 seen_quotes.add(quote)
                 collected_quotes.append(quote)
 
+    merged_aliases = tuple(
+        dict.fromkeys(
+            (
+                *advisory.known_aliases,
+                *(alias for cr in eligible_claims for alias in cr.claim.claim_aliases),
+            )
+        )
+    )
+
     zerobom_meta: dict[str, Any] = {
         "source_tier": report.source_tier.value,
         "source_tier_weight": report.source_tier_weight,
@@ -1018,6 +1162,8 @@ def compile_osv_advisory(
         "cwe_ids": list(advisory.cwe_ids),
         "evidence_quotes": collected_quotes,
     }
+    if advisory.article_type is not None:
+        zerobom_meta["article_type"] = advisory.article_type.value
     if held_triage_purls:
         zerobom_meta["held_for_triage_purls"] = list(held_triage_purls)
     if article is not None:
@@ -1033,7 +1179,7 @@ def compile_osv_advisory(
         published=published,
         summary=advisory.summary,
         details=advisory.details,
-        aliases=advisory.known_aliases,
+        aliases=merged_aliases,
         affected=tuple(affected_entries),
         references=tuple(refs),
         database_specific={"zerobom": zerobom_meta},
@@ -1449,7 +1595,10 @@ def _name_fallback_matches(
         if comp_type is not None and comp_type != affected_purl.type:
             return False
 
-    if affected_purl.type in {"maven", "npm", "golang", "composer"} and affected_purl.namespace:
+    if (
+        affected_purl.type in {"maven", "npm", "golang", "composer", "github"}
+        and affected_purl.namespace
+    ):
         affected_ns = affected_purl.namespace.lower()
         affected_pkg = affected_purl.name.lower()
         if component.namespace is not None:
@@ -1476,7 +1625,7 @@ def _name_fallback_matches(
     if affected_purl.type == "pypi":
         return _normalize_pep503(raw_name) == affected_purl.name.lower()
 
-    if affected_purl.type in {"maven", "npm", "golang", "composer"}:
+    if affected_purl.type in {"maven", "npm", "golang", "composer", "github"}:
         if component.namespace is not None:
             return (
                 component.namespace.strip().lower() == (affected_purl.namespace or "").lower()

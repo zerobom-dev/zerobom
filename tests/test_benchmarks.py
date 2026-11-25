@@ -256,7 +256,7 @@ def test_offline_adversarial_suite_has_zero_hallucination_escape() -> None:
     summary = evaluate_offline_suite()
 
     assert summary.suite == "offline"
-    assert summary.total_cases == 16
+    assert summary.total_cases == 23
     assert summary.routing_accuracy == 1.0
     assert summary.package_precision == 1.0
     assert summary.package_recall == 1.0
@@ -267,9 +267,9 @@ def test_offline_adversarial_suite_has_zero_hallucination_escape() -> None:
     assert summary.executed_at is None
     assert summary.dataset_sha256 is not None and len(summary.dataset_sha256) == 64
     assert summary.confusion_matrix == {
-        "auto": {"auto": 6, "triage": 0, "drop": 0},
-        "triage": {"auto": 0, "triage": 5, "drop": 0},
-        "drop": {"auto": 0, "triage": 0, "drop": 5},
+        "auto": {"auto": 7, "triage": 0, "drop": 0},
+        "triage": {"auto": 0, "triage": 9, "drop": 0},
+        "drop": {"auto": 0, "triage": 0, "drop": 7},
     }
     assert all(
         item.routing_match and not item.hallucination_escaped for item in summary.case_results
@@ -369,7 +369,7 @@ def test_cli_offline_mode_writes_json_and_markdown_reports(tmp_path: Path) -> No
     assert md_out.exists()
 
     parsed = EvalSummary.model_validate_json(json_out.read_text(encoding="utf-8"))
-    assert parsed.total_cases == 16
+    assert parsed.total_cases == 23
     assert parsed.hallucination_escape_rate == 0.0
 
     md_text = md_out.read_text(encoding="utf-8")

@@ -26,7 +26,11 @@ where:
 
 from __future__ import annotations
 
+import re
+from collections.abc import Sequence
+
 from zerobom.models import (
+    ArticleType,
     ClaimVerificationResult,
     CredibilityReport,
     ExtractedAdvisory,
@@ -38,9 +42,18 @@ from zerobom.models import (
     RegistryStatus,
     RoutingDecision,
     SourceTier,
+    VersionConstraint,
 )
-from zerobom.verify.grounding import verify_quote_grounding
-from zerobom.verify.osv_compiler import validate_claim_versions
+from zerobom.verify.grounding import (
+    check_distro_quote_grounding,
+    check_quote_polarity,
+    verify_quote_grounding,
+)
+from zerobom.verify.osv_compiler import (
+    _format_claim_osv_ecosystem,
+    detect_overlapping_branch_ranges,
+    validate_claim_versions,
+)
 from zerobom.verify.purl import RegistryChecker, resolve_purl
 
 TIER_WEIGHTS: dict[SourceTier, float] = {
@@ -55,6 +68,22 @@ UNGROUNDED_SPECIFICITY_CAP = 0.35
 WEAK_GROUNDING_SPECIFICITY_CAP = 0.70
 UNBOUNDED_VERSION_SPECIFICITY_CAP = 0.70
 REGISTRY_ERROR_SPECIFICITY_CAP = 0.70
+
+_CWE_ID_RE = re.compile(r"^CWE-[1-9]\d{0,4}$")
+_DROP_ARTICLE_TYPES: frozenset[ArticleType] = frozenset(
+    {
+        ArticleType.PRODUCT_ANNOUNCEMENT,
+        ArticleType.BENCHMARK_EVALUATION,
+        ArticleType.OFFENSIVE_TECHNIQUE,
+        ArticleType.NON_VULNERABILITY,
+    }
+)
+_TRIAGE_ONLY_ARTICLE_TYPES: frozenset[ArticleType] = frozenset(
+    {
+        ArticleType.KNOWN_VULN_ANALYSIS,
+        ArticleType.RESEARCH_GUIDANCE,
+    }
+)
 
 
 def route_score(composite_score: float) -> RoutingDecision:
@@ -191,13 +220,53 @@ def score_claim(
     )
 
 
+def _has_grounded_cwe(cwe_ids: Sequence[str], grounding_corpus: str) -> bool:
+    """Return True if at least one valid ``CWE-*`` identifier appears in ``grounding_corpus``."""
+    for cwe_id in cwe_ids:
+        val = cwe_id.strip().upper()
+        if not _CWE_ID_RE.match(val):
+            continue
+        if re.search(rf"(?<![a-z0-9]){re.escape(val.casefold())}(?![0-9])", grounding_corpus):
+            return True
+    return False
+
+
+def _apply_triage_cap(
+    claim_result: ClaimVerificationResult,
+    *,
+    tier_weight: float,
+    extra_reasons: Sequence[str],
+) -> ClaimVerificationResult:
+    """Cap a non-dropped claim below the ``AUTO`` threshold with deduplicated diagnostics."""
+    if not extra_reasons:
+        return claim_result
+
+    capped_specificity = round(
+        min(claim_result.extraction_specificity, WEAK_GROUNDING_SPECIFICITY_CAP),
+        4,
+    )
+    capped_composite = round(tier_weight * capped_specificity, 4)
+    merged_reasons = tuple(dict.fromkeys((*claim_result.reasons, *extra_reasons)))
+    return ClaimVerificationResult(
+        claim=claim_result.claim,
+        grounding=claim_result.grounding,
+        purl=claim_result.purl,
+        has_valid_version_range=claim_result.has_valid_version_range,
+        has_bounded_version_range=claim_result.has_bounded_version_range,
+        extraction_specificity=capped_specificity,
+        composite_score=capped_composite,
+        routing=route_score(capped_composite),
+        reasons=merged_reasons,
+    )
+
+
 def verify_advisory(
     article: RawArticle,
     advisory: ExtractedAdvisory,
     *,
     registry_checker: RegistryChecker | None = None,
 ) -> CredibilityReport:
-    """Run deterministic PURL, grounding, version, and credibility scoring on an advisory.
+    """Run deterministic PURL, grounding, version, polarity, and credibility scoring.
 
     Args:
         article: Raw ingested security article supplying body text and source tier.
@@ -209,7 +278,31 @@ def verify_advisory(
         ``dropped_claims`` along with advisory-level routing.
     """
     tier_weight = TIER_WEIGHTS[article.source_tier]
-    has_tech_context = bool(advisory.cwe_ids or advisory.references or advisory.known_aliases)
+
+    if advisory.article_type in _DROP_ARTICLE_TYPES:
+        return CredibilityReport(
+            article_url=advisory.article_url,
+            source_tier=article.source_tier,
+            source_tier_weight=tier_weight,
+            extraction_specificity=0.0,
+            composite_score=0.0,
+            routing=RoutingDecision.DROP,
+            claim_results=(),
+            accepted_claims=(),
+            dropped_claims=(),
+            reasons=(
+                f"Dropped advisory classified as non-actionable '{advisory.article_type.value}'.",
+            ),
+        )
+
+    grounding_corpus = f"{article.title}\n{article.body}\n{article.url}".casefold()
+    grounded_cwe = _has_grounded_cwe(advisory.cwe_ids, grounding_corpus)
+    has_tech_context = bool(
+        grounded_cwe
+        or advisory.references
+        or advisory.known_aliases
+        or any(claim.claim_aliases for claim in advisory.claims)
+    )
 
     if not advisory.claims:
         return CredibilityReport(
@@ -248,7 +341,76 @@ def verify_advisory(
             has_advisory_technical_context=has_tech_context,
             extra_reasons=ver_reasons,
         )
+        if scored.routing != RoutingDecision.DROP:
+            cap_reasons: list[str] = []
+            polarity_ok, polarity_reasons = check_quote_polarity(claim)
+            if not polarity_ok:
+                cap_reasons.extend(polarity_reasons)
+            distro_ok, distro_reasons = check_distro_quote_grounding(
+                claim,
+                ecosystem=purl_res.ecosystem,
+                namespace=purl_res.namespace,
+            )
+            if not distro_ok:
+                cap_reasons.extend(distro_reasons)
+            has_overlap, overlap_reason = detect_overlapping_branch_ranges(
+                purl_res.ecosystem,
+                claim.version_constraints,
+                package_name=purl_res.name,
+            )
+            if has_overlap and overlap_reason:
+                cap_reasons.append(overlap_reason)
+            if (
+                advisory.article_type in _TRIAGE_ONLY_ARTICLE_TYPES
+                and advisory.article_type is not None
+            ):
+                cap_reasons.append(
+                    f"Capped specificity below AUTO threshold for secondary article type "
+                    f"'{advisory.article_type.value}'."
+                )
+            scored = _apply_triage_cap(scored, tier_weight=tier_weight, extra_reasons=cap_reasons)
         claim_results.append(scored)
+
+    # Detect multi-claim open-origin ("introduced='0'") overlaps across separate claims targeting
+    # the same canonical PURL and formatted ecosystem stream (e.g. OpenSSL 5-branch updates).
+    grouped_indices: dict[tuple[str, str], list[int]] = {}
+    for idx, cr in enumerate(claim_results):
+        if cr.routing == RoutingDecision.DROP:
+            continue
+        if (
+            cr.purl.canonical_purl is None
+            or cr.purl.osv_ecosystem is None
+            or cr.purl.ecosystem is None
+        ):
+            continue
+        formatted_eco = _format_claim_osv_ecosystem(
+            cr.purl.osv_ecosystem,
+            cr.purl.ecosystem,
+            cr.claim.distro_release,
+        )
+        grouped_indices.setdefault((cr.purl.canonical_purl, formatted_eco), []).append(idx)
+
+    for indices in grouped_indices.values():
+        if len(indices) < 2:
+            continue
+        first = claim_results[indices[0]]
+        combined_constraints: list[VersionConstraint] = [
+            constraint
+            for idx in indices
+            for constraint in claim_results[idx].claim.version_constraints
+        ]
+        has_group_overlap, group_overlap_reason = detect_overlapping_branch_ranges(
+            first.purl.ecosystem,
+            combined_constraints,
+            package_name=first.purl.name,
+        )
+        if has_group_overlap and group_overlap_reason:
+            for idx in indices:
+                claim_results[idx] = _apply_triage_cap(
+                    claim_results[idx],
+                    tier_weight=tier_weight,
+                    extra_reasons=(group_overlap_reason,),
+                )
 
     accepted = tuple(cr for cr in claim_results if cr.routing != RoutingDecision.DROP)
     dropped = tuple(cr for cr in claim_results if cr.routing == RoutingDecision.DROP)

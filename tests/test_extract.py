@@ -20,7 +20,7 @@ from zerobom.extract import (
     prepare_article_window,
 )
 from zerobom.ingest import SafeHttpFetcher, prefilter_article
-from zerobom.models import RawArticle, RoutingDecision, SourceTier
+from zerobom.models import ArticleType, RawArticle, RoutingDecision, SourceTier
 from zerobom.verify import compile_osv_advisory, verify_advisory
 
 PUBLISHED_AT = datetime(2026, 5, 10, 9, 0, 0, tzinfo=UTC)
@@ -67,8 +67,10 @@ class TestPromptsAndWindowing:
         article = _sample_article(body=injected_body)
         messages = build_extraction_messages(article)
         assert len(messages) == 2
-        assert PROMPT_VERSION == "v1.4"
+        assert PROMPT_VERSION == "v1.5"
         assert "NEVER splice or concatenate non-adjacent lines" in messages[0]["content"]
+        assert "CWE-918" not in messages[0]["content"]
+        assert "CVE-2026-12345" not in messages[0]["content"]
         user_msg = messages[1]["content"]
         # Exactly one real opening and one real closing fence exist.
         assert user_msg.count("<UNTRUSTED_ARTICLE>") == 1
@@ -476,3 +478,79 @@ class TestOpenAICompatExtractor:
         with pytest.raises(ExtractionError, match="failed after 1 attempts"):
             deep_ext.extract(_sample_article())
         deep_client.close()
+
+    def test_extracts_article_type_grounded_cwes_and_claim_aliases(self) -> None:
+        article = _sample_article(
+            body=(
+                "Primary disclosure for CVE-2026-90001 and CWE-79 XSS in npm widget "
+                "prior to 2.1.0. Unlike historical CVE-2021-44228, this bug only hits widgets."
+            )
+        )
+        llm_payload = {
+            "title": "XSS in npm widget",
+            "summary": "widget prior to 2.1.0 is vulnerable to CWE-79.",
+            "details": "Stored XSS.",
+            "article_type": "original_disclosure",
+            "severity": "HIGH",
+            "cwe_ids": ["CWE-79", "CWE-918"],
+            "known_aliases": ["CVE-2026-90001", "CVE-2099-00001"],
+            "references": [],
+            "claims": [
+                {
+                    "raw_package_name": "widget",
+                    "ecosystem": "npm",
+                    "namespace": None,
+                    "distro_release": None,
+                    "version_constraints": [
+                        {
+                            "introduced": "0",
+                            "fixed": "2.1.0",
+                            "raw_specifier": "< 2.1.0",
+                        }
+                    ],
+                    "evidence_quote": "CWE-79 XSS in npm widget prior to 2.1.0.",
+                    "supporting_quotes": [],
+                    "claim_aliases": ["CVE-2026-90001", "CVE-2099-99999"],
+                }
+            ],
+        }
+        client = httpx.Client(
+            transport=httpx.MockTransport(
+                lambda _r: httpx.Response(
+                    200,
+                    json={"choices": [{"message": {"content": json.dumps(llm_payload)}}]},
+                )
+            )
+        )
+        extractor = OpenAICompatExtractor(
+            OpenAICompatConfig(model="gpt-4.1-mini"),
+            client=client,
+        )
+        extracted = extractor.extract(article)
+        client.close()
+
+        assert extracted.prompt_version == "v1.5"
+        assert extracted.article_type == ArticleType.ORIGINAL_DISCLOSURE
+        # CWE-918 was not mentioned in the article body and must be dropped.
+        assert extracted.cwe_ids == ("CWE-79",)
+        # Fabricated aliases not appearing in article text are dropped.
+        assert extracted.known_aliases == ("CVE-2026-90001",)
+        assert extracted.claims[0].claim_aliases == ("CVE-2026-90001",)
+
+        # Unknown article_type degrades gracefully to None without raising ValidationError.
+        bad_type_payload = {**llm_payload, "article_type": "unexpected_category", "claims": []}
+        bad_type_client = httpx.Client(
+            transport=httpx.MockTransport(
+                lambda _r: httpx.Response(
+                    200,
+                    json={"choices": [{"message": {"content": json.dumps(bad_type_payload)}}]},
+                )
+            )
+        )
+        bad_type_ext = OpenAICompatExtractor(
+            OpenAICompatConfig(model="gpt-4.1-mini"),
+            client=bad_type_client,
+        )
+        degraded = bad_type_ext.extract(article)
+        bad_type_client.close()
+        assert degraded.article_type is None

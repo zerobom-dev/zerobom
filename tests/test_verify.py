@@ -12,6 +12,7 @@ import pytest
 from pydantic import ValidationError
 
 from zerobom.models import (
+    ArticleType,
     ExtractedAdvisory,
     ExtractedPackageClaim,
     GroundingMatchType,
@@ -32,7 +33,10 @@ from zerobom.verify import (
     HttpRegistryChecker,
     InMemoryRegistryCache,
     SqliteRegistryCache,
+    check_distro_quote_grounding,
+    check_quote_polarity,
     compile_osv_advisory,
+    detect_overlapping_branch_ranges,
     evaluate_component_against_advisory,
     generate_precve_id,
     is_version_affected,
@@ -1955,3 +1959,277 @@ class TestHardeningAndRealWorldFormats:
         mr_u3 = evaluate_component_against_advisory(multi_osv, "pkg:pypi/urllib3", "2.2.0")
         assert mr_u3 is not None
         assert mr_u3.evidence_quote == "PyPI urllib3 versions prior to 2.2.2 leak headers."
+
+
+class _ExistsChecker:
+    """Minimal deterministic registry stub returning EXISTS for any queried PURL."""
+
+    def check(self, purl: str) -> RegistryStatus:
+        return RegistryStatus.EXISTS
+
+
+class TestV011VerificationHardening:
+    def test_requires_all_claimed_versions_in_quote(self) -> None:
+        body = (
+            "Node qs versions prior to 6.14.1 are affected. "
+            "Older branches from 6.11.0 prior to 6.11.3 are also affected."
+        )
+        advisory = ExtractedAdvisory(
+            article_url="https://security.example.org/qs-partial",
+            title="qs partial quote",
+            summary="qs partial quote",
+            claims=(
+                ExtractedPackageClaim(
+                    raw_package_name="qs",
+                    ecosystem="npm",
+                    version_constraints=(
+                        VersionConstraint(introduced="0", fixed="6.14.1"),
+                        VersionConstraint(introduced="6.11.0", fixed="6.11.3"),
+                    ),
+                    evidence_quote="Node qs versions prior to 6.14.1 are affected.",
+                ),
+            ),
+        )
+        report = verify_advisory(_make_article(body), advisory, registry_checker=_ExistsChecker())
+        assert report.routing == RoutingDecision.TRIAGE
+        assert report.claim_results[0].grounding.status == GroundingStatus.QUOTE_ONLY_WEAK
+
+        # Implied .0 branch origin verifies when only upper fix is quoted, while non-.0 doesn't.
+        branch_body = "PHP released fixes in 8.5.12."
+        implied_claim = ExtractedPackageClaim(
+            raw_package_name="php",
+            ecosystem="generic",
+            version_constraints=(VersionConstraint(introduced="8.5.0", fixed="8.5.12"),),
+            evidence_quote=branch_body,
+        )
+        assert verify_quote_grounding(branch_body, implied_claim).status == GroundingStatus.VERIFIED
+
+        explicit_origin_claim = ExtractedPackageClaim(
+            raw_package_name="php",
+            ecosystem="generic",
+            version_constraints=(VersionConstraint(introduced="8.5.1", fixed="8.5.12"),),
+            evidence_quote=branch_body,
+        )
+        assert (
+            verify_quote_grounding(branch_body, explicit_origin_claim).status
+            == GroundingStatus.QUOTE_ONLY_WEAK
+        )
+
+    def test_rejects_fixed_zero_and_caps_quote_polarity_and_distro_claims(self) -> None:
+        # 1) fixed="0" or last_affected="0" fails compilation without crash.
+        body_zero = "Example pkg version 1.0.0 issue."
+        adv_zero = ExtractedAdvisory(
+            article_url="https://security.example.org/zero",
+            title="Zero bound",
+            summary="Zero bound",
+            claims=(
+                ExtractedPackageClaim(
+                    raw_package_name="urllib3",
+                    ecosystem="pypi",
+                    version_constraints=(VersionConstraint(fixed="0"),),
+                    evidence_quote=body_zero,
+                ),
+            ),
+        )
+        assert (
+            compile_osv_advisory(adv_zero, verify_advisory(_make_article(body_zero), adv_zero))
+            is None
+        )
+
+        # 2) Malicious compromise paired with `fixed` fails polarity check.
+        mal_quote = (
+            "Compromised npm package evil-helper version 1.0.2 executes postinstall malware."
+        )
+        mal_claim = ExtractedPackageClaim(
+            raw_package_name="evil-helper",
+            ecosystem="npm",
+            version_constraints=(VersionConstraint(fixed="1.0.2"),),
+            evidence_quote=mal_quote,
+        )
+        polarity_ok, polarity_reasons = check_quote_polarity(mal_claim)
+        assert polarity_ok is False
+        assert any("malicious" in r.lower() for r in polarity_reasons)
+
+        # 3) Through / confirmed-against paired with `fixed` fails polarity check.
+        incl_claim = ExtractedPackageClaim(
+            raw_package_name="requests",
+            ecosystem="pypi",
+            version_constraints=(VersionConstraint(fixed="2.31.0"),),
+            evidence_quote="Python requests through 2.31.0 allows token leak.",
+        )
+        incl_ok, _ = check_quote_polarity(incl_claim)
+        assert incl_ok is False
+
+        # 4) Copyright-only quote fails polarity check.
+        banner_claim = ExtractedPackageClaim(
+            raw_package_name="impacket",
+            ecosystem="pypi",
+            version_constraints=(VersionConstraint(exact="0.12.0"),),
+            evidence_quote="Impacket v0.12.0 - Copyright Fortra 2024.",
+        )
+        banner_ok, _ = check_quote_polarity(banner_claim)
+        assert banner_ok is False
+
+        # 5) Upstream quote claimed as Debian distro without distro evidence fails distro grounding.
+        upstream_claim = ExtractedPackageClaim(
+            raw_package_name="openssl",
+            ecosystem="deb",
+            namespace="debian",
+            version_constraints=(VersionConstraint(introduced="0", fixed="3.0.15"),),
+            evidence_quote="Upstream OpenSSL prior to 3.0.15 leaks memory.",
+        )
+        distro_ok, _ = check_distro_quote_grounding(
+            upstream_claim, ecosystem="deb", namespace="debian"
+        )
+        assert distro_ok is False
+
+    def test_detects_overlapping_zero_introduced_branches_and_multi_claim_cap(self) -> None:
+        has_overlap, reason = detect_overlapping_branch_ranges(
+            "generic",
+            (
+                VersionConstraint(introduced="0", fixed="3.0.24"),
+                VersionConstraint(introduced="0", fixed="4.1.1"),
+            ),
+            package_name="openssl",
+        )
+        assert has_overlap is True
+        assert reason is not None
+
+        # Separate claims targeting same PURL + ecosystem stream also cap to TRIAGE.
+        body = (
+            "OpenSSL 3.0 branch fixes issue prior to 3.0.24. "
+            "OpenSSL 4.1 branch fixes issue prior to 4.1.1."
+        )
+        adv = ExtractedAdvisory(
+            article_url="https://security.example.org/openssl-overlap",
+            title="OpenSSL branches",
+            summary="OpenSSL branches",
+            claims=(
+                ExtractedPackageClaim(
+                    raw_package_name="openssl",
+                    ecosystem="generic",
+                    version_constraints=(VersionConstraint(introduced="0", fixed="3.0.24"),),
+                    evidence_quote="OpenSSL 3.0 branch fixes issue prior to 3.0.24.",
+                ),
+                ExtractedPackageClaim(
+                    raw_package_name="openssl",
+                    ecosystem="generic",
+                    version_constraints=(VersionConstraint(introduced="0", fixed="4.1.1"),),
+                    evidence_quote="OpenSSL 4.1 branch fixes issue prior to 4.1.1.",
+                ),
+            ),
+        )
+        report = verify_advisory(_make_article(body), adv, registry_checker=_ExistsChecker())
+        assert report.routing == RoutingDecision.TRIAGE
+
+    def test_blocks_non_distro_rpm_apache_firmware_and_caps_article_types(self) -> None:
+        # 1) pkg:rpm/apache/httpd is rejected by non-distro namespace blocklist.
+        apache_purl = resolve_purl("httpd", "rpm", namespace="apache")
+        assert apache_purl.is_valid is False
+
+        # 2) Generic firmware token is blocked.
+        fw_purl = resolve_purl("firmware", "generic")
+        assert fw_purl.is_valid is False
+
+        # 3) Delimiter `::` in package coordinate matches grounded body.
+        col_claim = ExtractedPackageClaim(
+            raw_package_name="Net::HTTP",
+            ecosystem="gem",
+            version_constraints=(VersionConstraint(introduced="0", fixed="0.4.1"),),
+            evidence_quote="Ruby Net::HTTP prior to 0.4.1 leaks credentials.",
+        )
+        col_res = verify_quote_grounding(
+            "Ruby Net::HTTP prior to 0.4.1 leaks credentials.",
+            col_claim,
+        )
+        assert col_res.status == GroundingStatus.VERIFIED
+
+        # 4) Non-vulnerability / offensive / product / benchmark ArticleType -> DROP.
+        good_body = "Python requests versions prior to 2.31.0 leak credentials."
+        drop_adv = ExtractedAdvisory(
+            article_url="https://security.example.org/offensive",
+            title="Red team guide",
+            summary="Red team guide",
+            article_type=ArticleType.OFFENSIVE_TECHNIQUE,
+            claims=(
+                ExtractedPackageClaim(
+                    raw_package_name="requests",
+                    ecosystem="pypi",
+                    version_constraints=(VersionConstraint(introduced="0", fixed="2.31.0"),),
+                    evidence_quote=good_body,
+                ),
+            ),
+        )
+        drop_report = verify_advisory(
+            _make_article(good_body), drop_adv, registry_checker=_ExistsChecker()
+        )
+        assert drop_report.routing == RoutingDecision.DROP
+        assert compile_osv_advisory(drop_adv, drop_report) is None
+
+        # 5) Secondary known_vuln_analysis ArticleType -> capped to TRIAGE.
+        triage_adv = drop_adv.model_copy(update={"article_type": ArticleType.KNOWN_VULN_ANALYSIS})
+        triage_report = verify_advisory(
+            _make_article(good_body), triage_adv, registry_checker=_ExistsChecker()
+        )
+        assert triage_report.routing == RoutingDecision.TRIAGE
+        compiled = compile_osv_advisory(triage_adv, triage_report)
+        assert compiled is not None
+        assert compiled.affected[0].database_specific["zerobom"]["routing"] == "triage"
+
+    def test_github_purl_and_expanded_registry_checker(self) -> None:
+        gh_res = resolve_purl("aquasecurity/trivy", "github", namespace="aquasecurity")
+        assert gh_res.is_valid is True
+        assert gh_res.canonical_purl == "pkg:github/aquasecurity/trivy"
+
+        seen_urls: list[str] = []
+
+        def _handler(request: httpx.Request) -> httpx.Response:
+            seen_urls.append(str(request.url))
+            return httpx.Response(200, json={"ok": True})
+
+        with httpx.Client(transport=httpx.MockTransport(_handler)) as client:
+            checker = HttpRegistryChecker(client=client)
+            assert checker.check("pkg:cargo/serde") == RegistryStatus.EXISTS
+            assert checker.check("pkg:gem/rails") == RegistryStatus.EXISTS
+            assert checker.check("pkg:nuget/Newtonsoft.Json") == RegistryStatus.EXISTS
+            assert checker.check("pkg:composer/symfony/http-kernel") == RegistryStatus.EXISTS
+
+        assert "https://crates.io/api/v1/crates/serde" in seen_urls
+        assert "https://rubygems.org/api/v1/gems/rails.json" in seen_urls
+        assert "https://api.nuget.org/v3-flatcontainer/newtonsoft.json/index.json" in seen_urls
+        assert "https://repo.packagist.org/p2/symfony/http-kernel.json" in seen_urls
+
+    def test_osv_hard_auto_gate_drops_unbounded_claims(self) -> None:
+        # Claim with valid unbounded package + bounded verified claim: AUTO compiles only bounded!
+        body = (
+            "Python requests prior to 2.31.0 is vulnerable. "
+            "PyPI urllib3 was also mentioned without fixed versions."
+        )
+        adv = ExtractedAdvisory(
+            article_url="https://security.example.org/mixed-auto",
+            title="Mixed bounds",
+            summary="Mixed bounds",
+            claims=(
+                ExtractedPackageClaim(
+                    raw_package_name="requests",
+                    ecosystem="pypi",
+                    version_constraints=(VersionConstraint(introduced="0", fixed="2.31.0"),),
+                    evidence_quote="Python requests prior to 2.31.0 is vulnerable.",
+                    claim_aliases=("CVE-2026-88888",),
+                ),
+                ExtractedPackageClaim(
+                    raw_package_name="urllib3",
+                    ecosystem="pypi",
+                    version_constraints=(),
+                    evidence_quote="PyPI urllib3 was also mentioned without fixed versions.",
+                ),
+            ),
+        )
+        report = verify_advisory(_make_article(body), adv, registry_checker=_ExistsChecker())
+        assert report.routing == RoutingDecision.AUTO
+        osv_doc = compile_osv_advisory(adv, report)
+        assert osv_doc is not None
+        assert len(osv_doc.affected) == 1
+        assert osv_doc.affected[0].package.name == "requests"
+        assert "CVE-2026-88888" in osv_doc.aliases
+        assert osv_doc.affected[0].database_specific["zerobom"]["routing"] == "auto"

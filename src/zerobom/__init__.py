@@ -3,6 +3,7 @@
 from zerobom._version import __version__
 from zerobom.models import (
     ArticleStateRecord,
+    ArticleType,
     AssetRef,
     ClaimVerificationResult,
     CredibilityReport,
@@ -37,6 +38,7 @@ from zerobom.models import (
 
 __all__ = [
     "ArticleStateRecord",
+    "ArticleType",
     "AssetRef",
     "ClaimVerificationResult",
     "CredibilityReport",

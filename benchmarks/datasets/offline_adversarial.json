@@ -796,5 +796,301 @@
     "expect_osv_compiled": true,
     "version_probes": [],
     "notes": "Cross-paragraph multi-quote stitching fails co-occurrence invariant and blocks AUTO escalation."
+  },
+  {
+    "case_id": "offline-gold-07-github-action",
+    "case_kind": "golden",
+    "attack_vector": "clean_range",
+    "article": {
+      "url": "https://research.example.org/advisories/github-trivy-token-leak",
+      "title": "Credential Exposure in aquasecurity/trivy",
+      "body": "Maintainers fixed a credential leak in GitHub repository aquasecurity/trivy versions from 0.50.0 prior to 0.58.1.",
+      "source_name": "SecLab Disclosures",
+      "source_tier": "tier_1",
+      "published_at": "2026-11-20T12:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://research.example.org/advisories/github-trivy-token-leak",
+      "title": "Credential Exposure in aquasecurity/trivy",
+      "summary": "aquasecurity/trivy from 0.50.0 prior to 0.58.1 leaks tokens.",
+      "article_type": "original_disclosure",
+      "claims": [
+        {
+          "raw_package_name": "aquasecurity/trivy",
+          "ecosystem": "github",
+          "namespace": "aquasecurity",
+          "version_constraints": [
+            {
+              "introduced": "0.50.0",
+              "fixed": "0.58.1"
+            }
+          ],
+          "evidence_quote": "aquasecurity/trivy versions from 0.50.0 prior to 0.58.1."
+        }
+      ],
+      "severity": "HIGH",
+      "extractor_model": "offline-fixture",
+      "prompt_version": "v1.5"
+    },
+    "mock_registry_status": {
+      "pkg:github/aquasecurity/trivy": "exists"
+    },
+    "expected_routing": "auto",
+    "expected_accepted_purls": ["pkg:github/aquasecurity/trivy"],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": true,
+    "version_probes": [
+      {
+        "component_purl": "pkg:github/aquasecurity/trivy",
+        "installed_version": "0.55.0",
+        "expected_vulnerable": true,
+        "description": "Within 0.50.0..<0.58.1"
+      },
+      {
+        "component_purl": "pkg:github/aquasecurity/trivy",
+        "installed_version": "0.58.1",
+        "expected_vulnerable": false,
+        "description": "Fixed release 0.58.1"
+      }
+    ],
+    "notes": "Golden GitHub ecosystem PURL and SemVer version matching."
+  },
+  {
+    "case_id": "offline-adv-11-partial-quote-version",
+    "case_kind": "adversarial",
+    "attack_vector": "bait_and_switch_quote",
+    "article": {
+      "url": "https://research.example.org/advisories/npm-qs-partial-quote",
+      "title": "DoS in npm qs branches",
+      "body": "Node package qs versions prior to 6.14.1 and from 6.11.0 prior to 6.11.3 are vulnerable to arrayLimit bypass.",
+      "source_name": "SecLab Disclosures",
+      "source_tier": "tier_1",
+      "published_at": "2026-11-20T12:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://research.example.org/advisories/npm-qs-partial-quote",
+      "title": "DoS in npm qs branches",
+      "summary": "npm qs bypasses arrayLimit.",
+      "article_type": "vendor_advisory",
+      "claims": [
+        {
+          "raw_package_name": "qs",
+          "ecosystem": "npm",
+          "version_constraints": [
+            {"introduced": "0", "fixed": "6.14.1"},
+            {"introduced": "6.11.0", "fixed": "6.11.3"}
+          ],
+          "evidence_quote": "Node package qs versions prior to 6.14.1"
+        }
+      ],
+      "severity": "HIGH",
+      "extractor_model": "adversarial-sim",
+      "prompt_version": "v1.5"
+    },
+    "mock_registry_status": {
+      "pkg:npm/qs": "exists"
+    },
+    "expected_routing": "triage",
+    "expected_accepted_purls": ["pkg:npm/qs"],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": true,
+    "version_probes": [],
+    "notes": "Partial quote missing 6.11.0 and 6.11.3 fails strict all-version grounding and caps to TRIAGE."
+  },
+  {
+    "case_id": "offline-adv-12-overlapping-zero-branches",
+    "case_kind": "adversarial",
+    "attack_vector": "clean_range",
+    "article": {
+      "url": "https://research.example.org/advisories/openssl-overlap-branches",
+      "title": "OpenSSL Multi-Branch TLS Fix",
+      "body": "Upstream openssl branches prior to 3.0.24 and openssl branches prior to 4.1.1 fix parsing bugs.",
+      "source_name": "SecLab Disclosures",
+      "source_tier": "tier_1",
+      "published_at": "2026-11-20T12:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://research.example.org/advisories/openssl-overlap-branches",
+      "title": "OpenSSL Multi-Branch TLS Fix",
+      "summary": "OpenSSL multi-branch fix.",
+      "article_type": "vendor_advisory",
+      "claims": [
+        {
+          "raw_package_name": "openssl",
+          "ecosystem": "generic",
+          "version_constraints": [
+            {"introduced": "0", "fixed": "3.0.24"},
+            {"introduced": "0", "fixed": "4.1.1"}
+          ],
+          "evidence_quote": "Upstream openssl branches prior to 3.0.24 and openssl branches prior to 4.1.1 fix parsing bugs."
+        }
+      ],
+      "severity": "MEDIUM",
+      "extractor_model": "adversarial-sim",
+      "prompt_version": "v1.5"
+    },
+    "mock_registry_status": {},
+    "expected_routing": "triage",
+    "expected_accepted_purls": ["pkg:generic/openssl"],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": true,
+    "version_probes": [],
+    "notes": "Multiple introduced='0' branch constraints overlap and cap to TRIAGE."
+  },
+  {
+    "case_id": "offline-adv-13-quote-polarity-malicious",
+    "case_kind": "adversarial",
+    "attack_vector": "clean_range",
+    "article": {
+      "url": "https://research.example.org/advisories/npm-compromised-polarity",
+      "title": "Compromised npm telemetry-helper 1.0.2",
+      "body": "Compromised npm package telemetry-helper version 1.0.2 executes malicious postinstall payload.",
+      "source_name": "SecLab Disclosures",
+      "source_tier": "tier_1",
+      "published_at": "2026-11-20T12:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://research.example.org/advisories/npm-compromised-polarity",
+      "title": "Compromised npm telemetry-helper 1.0.2",
+      "summary": "Malicious telemetry-helper 1.0.2 release.",
+      "article_type": "malicious_package",
+      "claims": [
+        {
+          "raw_package_name": "telemetry-helper",
+          "ecosystem": "npm",
+          "version_constraints": [{"fixed": "1.0.2"}],
+          "evidence_quote": "Compromised npm package telemetry-helper version 1.0.2 executes malicious postinstall payload."
+        }
+      ],
+      "severity": "CRITICAL",
+      "extractor_model": "adversarial-sim",
+      "prompt_version": "v1.5"
+    },
+    "mock_registry_status": {
+      "pkg:npm/telemetry-helper": "exists"
+    },
+    "expected_routing": "triage",
+    "expected_accepted_purls": ["pkg:npm/telemetry-helper"],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": true,
+    "version_probes": [],
+    "notes": "Malicious release mislabeled as fixed blocks AUTO escalation via quote polarity guard."
+  },
+  {
+    "case_id": "offline-adv-14-impacket-offensive-drop",
+    "case_kind": "adversarial",
+    "attack_vector": "generic_blocklist",
+    "article": {
+      "url": "https://research.example.org/redteam/impacket-relay-usage",
+      "title": "Red-Team Tradecraft With Impacket",
+      "body": "Run Impacket v0.12.0 during lateral movement labs. Copyright (C) 2024 SecureAuth Corporation.",
+      "source_name": "SecLab Disclosures",
+      "source_tier": "tier_1",
+      "published_at": "2026-11-20T12:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://research.example.org/redteam/impacket-relay-usage",
+      "title": "Impacket v0.12.0 Copyright Banner Misclassified",
+      "summary": "Offensive tradecraft post misclassified as package vulnerability.",
+      "article_type": "offensive_technique",
+      "claims": [
+        {
+          "raw_package_name": "impacket",
+          "ecosystem": "pypi",
+          "version_constraints": [{"introduced": "0", "fixed": "0.12.0"}],
+          "evidence_quote": "Run Impacket v0.12.0 during lateral movement labs. Copyright (C) 2024 SecureAuth Corporation."
+        }
+      ],
+      "severity": "HIGH",
+      "extractor_model": "adversarial-sim",
+      "prompt_version": "v1.5"
+    },
+    "mock_registry_status": {
+      "pkg:pypi/impacket": "exists"
+    },
+    "expected_routing": "drop",
+    "expected_accepted_purls": [],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": false,
+    "version_probes": [],
+    "notes": "Offensive tradecraft article type drops claims cleanly regardless of registry match."
+  },
+  {
+    "case_id": "offline-adv-15-apache-rpm-distro-drop",
+    "case_kind": "adversarial",
+    "attack_vector": "generic_blocklist",
+    "article": {
+      "url": "https://research.example.org/advisories/apache-httpd-upstream",
+      "title": "Apache HTTP Server 2.4.63 Fix",
+      "body": "Upstream Apache HTTP Server 2.4.62 fixes request smuggling prior to 2.4.63.",
+      "source_name": "SecLab Disclosures",
+      "source_tier": "tier_1",
+      "published_at": "2026-11-20T12:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://research.example.org/advisories/apache-httpd-upstream",
+      "title": "Apache HTTP Server mislabeled as pkg:rpm/apache/httpd",
+      "summary": "Upstream software vendor mislabeled as RPM distro namespace.",
+      "article_type": "vendor_advisory",
+      "claims": [
+        {
+          "raw_package_name": "httpd",
+          "ecosystem": "rpm",
+          "namespace": "apache",
+          "version_constraints": [{"introduced": "0", "fixed": "2.4.63"}],
+          "evidence_quote": "Upstream Apache HTTP Server 2.4.62 fixes request smuggling prior to 2.4.63."
+        }
+      ],
+      "severity": "HIGH",
+      "extractor_model": "adversarial-sim",
+      "prompt_version": "v1.5"
+    },
+    "mock_registry_status": {},
+    "expected_routing": "drop",
+    "expected_accepted_purls": [],
+    "expected_dropped_count": 1,
+    "expect_osv_compiled": false,
+    "version_probes": [],
+    "notes": "Non-distro namespace 'apache' under rpm ecosystem is blocked."
+  },
+  {
+    "case_id": "offline-adv-16-secondary-explainer-triage",
+    "case_kind": "adversarial",
+    "attack_vector": "clean_range",
+    "article": {
+      "url": "https://research.example.org/waf/legacy-requests-explainer",
+      "title": "WAF Rules for Legacy CVE-2023-32681",
+      "body": "WAF walkthrough covering legacy CVE-2023-32681 in Python requests prior to 2.31.0.",
+      "source_name": "SecLab Disclosures",
+      "source_tier": "tier_1",
+      "published_at": "2026-11-20T12:00:00Z"
+    },
+    "advisory": {
+      "article_url": "https://research.example.org/waf/legacy-requests-explainer",
+      "title": "WAF Rules for Legacy CVE-2023-32681",
+      "summary": "Secondary explainer for known CVE in requests prior to 2.31.0.",
+      "article_type": "known_vuln_analysis",
+      "known_aliases": ["CVE-2023-32681"],
+      "claims": [
+        {
+          "raw_package_name": "requests",
+          "ecosystem": "pypi",
+          "version_constraints": [{"introduced": "0", "fixed": "2.31.0"}],
+          "evidence_quote": "Python requests prior to 2.31.0."
+        }
+      ],
+      "severity": "MEDIUM",
+      "extractor_model": "adversarial-sim",
+      "prompt_version": "v1.5"
+    },
+    "mock_registry_status": {
+      "pkg:pypi/requests": "exists"
+    },
+    "expected_routing": "triage",
+    "expected_accepted_purls": ["pkg:pypi/requests"],
+    "expected_dropped_count": 0,
+    "expect_osv_compiled": true,
+    "version_probes": [],
+    "notes": "Secondary known_vuln_analysis post caps Tier 1 advisory to TRIAGE instead of AUTO."
   }
 ]

@@ -240,6 +240,47 @@ _MARKETING_SIGNAL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("conference", re.compile(r"\b(?:conference booth|visit our booth|rsa conference)\b", re.I)),
     ("press_release", re.compile(r"\b(?:press release|gartner|forrester|book a demo)\b", re.I)),
     ("quarterly", re.compile(r"\b(?:quarterly earnings|customer spotlight)\b", re.I)),
+    (
+        "product_ga",
+        re.compile(
+            r"\b(?:general availability|now generally available|"
+            r"announcing .{0,40}?\bga\b|reaches ga)\b",
+            re.I,
+        ),
+    ),
+    (
+        "listicle_alternatives",
+        re.compile(
+            r"\b(?:top\s+\d+\s+(?:alternatives?|tools?|solutions?|scanners?|platforms?)|best\s+\d+\s+[a-z]+\s+(?:alternatives?|tools?|solutions?)|alternatives?\s+to\b)",
+            re.I,
+        ),
+    ),
+    (
+        "model_benchmark",
+        re.compile(
+            r"\b(?:benchmark(?:s|ing)?\s+(?:results?|suite|leaderboard|comparison)|model\s+benchmark|llm\s+benchmark|eval\s+leaderboard)\b",
+            re.I,
+        ),
+    ),
+)
+
+_STRONG_NON_ADVISORY_TITLE_SIGNALS = frozenset(
+    {"product_ga", "listicle_alternatives", "model_benchmark"}
+)
+
+_CONCRETE_FLAW_EVIDENCE_RE = re.compile(
+    r"\b(?:exploit(?:ed|ation|s)?|proof[- ]of[- ]concept|poc|zero[- ]day|0[- ]day|backdoor|"
+    r"arbitrary\s+code|remote\s+code\s+execution|rce|sql\s+injection|ssrf|command\s+injection|"
+    r"privilege\s+escalation|authentication\s+bypass|path\s+traversal|buffer\s+overflow|"
+    r"use[- ]after[- ]free|fixed\s+in|patched\s+in|upgrade\s+to|affected\s+versions?|"
+    r"prior\s+to\s+v?\d|before\s+v?\d)\b",
+    re.I,
+)
+
+_ADVISORY_VERSION_EVIDENCE_RE = re.compile(
+    r"\b(?:fixed\s+in|patched\s+in|upgrade\s+to|affected\s+versions?|prior\s+to\s+v?\d|"
+    r"before\s+v?\d|versions?\s+v?\d+\.\d+)\b",
+    re.I,
 )
 
 
@@ -321,10 +362,24 @@ def prefilter_article(article: RawArticle) -> PrefilterResult:
 
     software_signals = [name for name, pat in _SOFTWARE_SIGNAL_PATTERNS if pat.search(combined)]
     marketing_signals = [name for name, pat in _MARKETING_SIGNAL_PATTERNS if pat.search(combined)]
+    title_marketing = [
+        name for name, pat in _MARKETING_SIGNAL_PATTERNS if pat.search(article.title)
+    ]
+    has_concrete_flaw = bool(_CONCRETE_FLAW_EVIDENCE_RE.search(combined))
+    has_version_evidence = bool(_ADVISORY_VERSION_EVIDENCE_RE.search(combined))
 
     has_pair = len(vuln_signals) >= 1 and len(software_signals) >= 1
     strong_vuln_only = len(vuln_signals) >= 2 and len(marketing_signals) <= len(vuln_signals)
     passed = has_pair or strong_vuln_only
+    dropped_title_noise = False
+    if passed and title_marketing and not extracted_aliases:
+        if any(sig in _STRONG_NON_ADVISORY_TITLE_SIGNALS for sig in title_marketing):
+            if not has_version_evidence:
+                passed = False
+                dropped_title_noise = True
+        elif not has_concrete_flaw:
+            passed = False
+            dropped_title_noise = True
 
     raw_score = (
         min(0.50, 0.25 * len(vuln_signals))
@@ -336,7 +391,11 @@ def prefilter_article(article: RawArticle) -> PrefilterResult:
 
     reasons: list[str] = []
     if not passed:
-        if marketing_signals and not vuln_signals:
+        if dropped_title_noise:
+            reasons.append(
+                "Dropped marketing/benchmark/announcement article lacking concrete flaw evidence."
+            )
+        elif marketing_signals and not vuln_signals:
             reasons.append("Dropped promotional/marketing article lacking vulnerability signals.")
         else:
             reasons.append(

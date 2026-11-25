@@ -7,7 +7,7 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__: str = version("zerobom")
 except PackageNotFoundError:  # pragma: no cover - uninstalled source fallback
-    __version__ = "0.1.0"
+    __version__ = "0.1.1"
 
 REPOSITORY_URL: str = "https://github.com/zerobom-dev/zerobom"
 HOMEPAGE_URL: str = "https://zerobom.dev/"

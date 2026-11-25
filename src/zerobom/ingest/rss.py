@@ -313,15 +313,34 @@ def parse_feed_entries(
         if not isinstance(raw_link, str):
             continue
 
-        published_at = _parse_struct_time(
-            raw_entry.get("published_parsed") or raw_entry.get("updated_parsed")
-        )
+        raw_published = raw_entry.get("published_parsed") or raw_entry.get("updated_parsed")
+        published_at_inferred = True
+        if (
+            raw_published is not None
+            and isinstance(raw_published, tuple)
+            and len(raw_published) >= 6
+        ):
+            try:
+                datetime(
+                    int(raw_published[0]),
+                    int(raw_published[1]),
+                    int(raw_published[2]),
+                    int(raw_published[3]),
+                    int(raw_published[4]),
+                    min(int(raw_published[5]), 59),
+                    tzinfo=UTC,
+                )
+                published_at_inferred = False
+            except (TypeError, ValueError):
+                published_at_inferred = True
+        published_at = _parse_struct_time(raw_published)
         try:
             entry = FeedEntry(
                 url=raw_link,
                 title=str(raw_title),
                 summary=str(raw_summary),
                 published_at=published_at,
+                published_at_inferred=published_at_inferred,
                 source_name=feed.name,
                 source_tier=feed.tier,
             )
@@ -449,6 +468,7 @@ def parse_sitemap_entries(
                 title=_title_from_url_slug(loc_url),
                 summary="",
                 published_at=parsed_dt or fallback_now,
+                published_at_inferred=parsed_dt is None,
                 source_name=feed.name,
                 source_tier=feed.tier,
             )
@@ -567,6 +587,16 @@ def parse_html_index_entries(
         if not _matches_url_prefix(defragged, feed.url_prefix):
             continue
 
+        path_segments = [seg.lower() for seg in urlparse(defragged).path.split("/") if seg]
+        if path_segments and (
+            path_segments[-1] in {"feed", "rss", "rss.xml", "atom.xml", "feed.xml", "sitemap.xml"}
+            or any(
+                seg in {"tag", "tags", "category", "categories", "author", "authors", "page"}
+                for seg in path_segments
+            )
+        ):
+            continue
+
         canonical = canonicalize_url(defragged)
         if canonical in excluded_canonicals or canonical in seen_urls:
             continue
@@ -577,6 +607,7 @@ def parse_html_index_entries(
                 title=_clean_anchor_title(anchor_text, defragged),
                 summary="",
                 published_at=now,
+                published_at_inferred=True,
                 source_name=feed.name,
                 source_tier=feed.tier,
             )
@@ -727,6 +758,7 @@ def poll_feed_items(
                 source_name=feed.name,
                 source_tier=feed.tier,
                 published_at=entry.published_at,
+                published_at_inferred=entry.published_at_inferred,
                 conditional_headers=cond_headers,
             )
             if article is None:

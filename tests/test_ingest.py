@@ -16,6 +16,7 @@ from zerobom.ingest import (
     SsrfBlockedError,
     compute_content_sha256,
     discover_feed_entries,
+    extract_article_metadata_and_text,
     extract_article_text,
     extract_known_aliases,
     is_public_ip,
@@ -876,3 +877,139 @@ class TestPreReleaseSecurityRegressions:
         with SafeHttpFetcher() as fetcher:
             assert fetcher.client.trust_env is False
             assert fetcher.client.headers["user-agent"] == DEFAULT_USER_AGENT
+
+
+class TestV011IngestMetadataAndFiltering:
+    def test_extracts_html_metadata_date_and_overrides_inferred_timestamp(self) -> None:
+        html_bytes = (
+            b"<html><head><title>Pre-CVE Curl Bug</title>"
+            b'<meta property="article:published_time" content="2026-11-18T10:30:00Z">'
+            b"</head><body><article><p>Curl versions prior to 8.11.0 leak secrets.</p>"
+            b"</article></body></html>"
+        )
+        title, body, meta_dt = extract_article_metadata_and_text(html_bytes, "text/html")
+        assert "Curl" in title
+        assert "8.11.0" in body
+        assert meta_dt == datetime(2026, 11, 18, 0, 0, tzinfo=UTC)
+
+        # Future or pre-1990 dates are rejected cleanly.
+        future_html = (
+            b'<html><head><meta property="article:published_time" content="2099-01-01"></head>'
+            b"<body><p>Future post</p></body></html>"
+        )
+        _, _, future_dt = extract_article_metadata_and_text(future_html, "text/html")
+        assert future_dt is None
+
+        transport = httpx.MockTransport(
+            lambda _req: httpx.Response(
+                200,
+                headers={"Content-Type": "text/html"},
+                content=html_bytes,
+            )
+        )
+        with SafeHttpFetcher(
+            client=httpx.Client(transport=transport),
+            dns_resolver=_public_dns,
+        ) as fetcher:
+            # Inferred index timestamp gets replaced by extracted HTML metadata.date.
+            inferred_now = datetime(2026, 11, 25, 0, 0, 0, tzinfo=UTC)
+            article, _ = fetcher.fetch_article(
+                "https://research.example.org/posts/curl-bug",
+                source_name="Example Blog",
+                source_tier=SourceTier.TIER_1,
+                published_at=inferred_now,
+                published_at_inferred=True,
+            )
+            assert article is not None
+            assert article.published_at == datetime(2026, 11, 18, 0, 0, tzinfo=UTC)
+            assert article.published_at_inferred is False
+
+            # Without HTML date and without feed date, published_at falls back as inferred.
+            no_date_fetcher_transport = httpx.MockTransport(
+                lambda _req: httpx.Response(
+                    200,
+                    headers={"Content-Type": "text/html"},
+                    content=b"<html><body><p>Plain article body.</p></body></html>",
+                )
+            )
+            with SafeHttpFetcher(
+                client=httpx.Client(transport=no_date_fetcher_transport),
+                dns_resolver=_public_dns,
+            ) as plain_fetcher:
+                plain_article, _ = plain_fetcher.fetch_article(
+                    "https://research.example.org/posts/no-date",
+                    source_name="Example Blog",
+                    source_tier=SourceTier.TIER_2,
+                )
+                assert plain_article is not None
+                assert plain_article.published_at_inferred is True
+
+    def test_html_index_excludes_feed_tag_and_pagination_urls(self) -> None:
+        feed = SourceFeedConfig(
+            name="Vendor Blog",
+            url="https://vendor.example.org/resources/blog",
+            tier=SourceTier.TIER_2,
+            kind=FeedKind.HTML_INDEX,
+            url_prefix="https://vendor.example.org/resources/blog/",
+        )
+        html_index = b"""
+        <html><body>
+          <a href="/resources/blog/feed/">RSS Feed</a>
+          <a href="/resources/blog/tag/vulnerabilities/">Vulnerabilities Tag</a>
+          <a href="/resources/blog/category/advisories/">Advisories Category</a>
+          <a href="/resources/blog/page/2/">Older Posts</a>
+          <a href="/resources/blog/zero-day-rce-in-proxy">Zero-Day RCE in Proxy</a>
+        </body></html>
+        """
+        entries = parse_html_index_entries(html_index, feed)
+        assert [e.url for e in entries] == [
+            "https://vendor.example.org/resources/blog/zero-day-rce-in-proxy"
+        ]
+        assert entries[0].published_at_inferred is True
+
+    def test_prefilter_drops_product_ga_listicle_and_benchmark_articles(self) -> None:
+        listicle = RawArticle(
+            url="https://blog.example.org/top-alternatives",
+            title="Top 10 Alternatives to Dependabot for Open-Source Security",
+            body="Modern Python and npm dependency managers check vulnerability databases daily.",
+            source_name="Example Blog",
+            source_tier=SourceTier.TIER_2,
+            published_at=PUBLISHED_AT,
+        )
+        assert prefilter_article(listicle).passed is False
+
+        benchmark = RawArticle(
+            url="https://blog.example.org/llm-benchmark",
+            title="AI Model Benchmark Results for Static Vulnerability Detection",
+            body=(
+                "Our Python scanner benchmark measured SQL injection recall across open-source "
+                "repos."
+            ),
+            source_name="Example Blog",
+            source_tier=SourceTier.TIER_2,
+            published_at=PUBLISHED_AT,
+        )
+        assert prefilter_article(benchmark).passed is False
+
+        ga_post = RawArticle(
+            url="https://blog.example.org/platform-ga",
+            title="Announcing Zero-Trust Scanner General Availability",
+            body="Our cloud platform now helps Kubernetes teams monitor vulnerability exposure.",
+            source_name="Example Blog",
+            source_tier=SourceTier.TIER_2,
+            published_at=PUBLISHED_AT,
+        )
+        assert prefilter_article(ga_post).passed is False
+
+        real_fix = RawArticle(
+            url="https://blog.example.org/real-vuln",
+            title="Announcing General Availability of Fix for Proxy RCE",
+            body=(
+                "Affected versions prior to 2.3.1 contain a remote code execution flaw fixed in "
+                "2.3.1."
+            ),
+            source_name="Example Blog",
+            source_tier=SourceTier.TIER_2,
+            published_at=PUBLISHED_AT,
+        )
+        assert prefilter_article(real_fix).passed is True

@@ -42,6 +42,43 @@ _COLON_LIST_NEGATION_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Quote-polarity guards rejecting inverted malicious/through/copyright claims as "fixed".
+_FIX_PHRASING_RE = re.compile(
+    r"\b(?:fix(?:ed|es)?|patch(?:ed|es)?|resolv(?:ed|es)|address(?:ed|es)|remediat(?:ed|es)|"
+    r"mitigat(?:ed|es)|upgrade\s+to|update\s+to|prior\s+to|before|earlier\s+than|below|"
+    r"newer\s+than|security\s+(?:fix|release)|backport(?:ed|s)?|hot[- ]?patch(?:ed)?)\b",
+    re.IGNORECASE,
+)
+_MALICIOUS_COMPROMISE_PHRASE_RE = re.compile(
+    r"\b(?:malicious\s+(?:package|packages|version|versions|release|releases|npm|pypi|"
+    r"nuget|crate|postinstall|workflow)|postinstall\s+malware|"
+    r"published\s+by\s+(?:the\s+)?compromised|"
+    r"compromised\s+(?:(?:npm|pypi|python|nuget|cargo|rust|gem|ruby|go|golang|"
+    r"maven|composer|php|github)\s+)?(?:account|maintainer|package|packages|version|"
+    r"versions|release|releases|module|crate|gem|library)|remains\s+listed|"
+    r"obfuscated\s+dropper|remote[- ]code\s+loader|secret\s+stealer|trojanized|"
+    r"contain\s+(?:the\s+)?payload|as\s+compromised)\b",
+    re.IGNORECASE,
+)
+_VULN_CONTEXT_PHRASE_RE = re.compile(
+    r"\b(?:vulnerab(?:le|ility|ilities)|rce|code\s+execution|ssrf|xss|overflow|"
+    r"deserialization|injection|traversal|bypass|privilege\s+escalation|denial[- ]of[- ]service|"
+    r"memory\s+corruption|backdoor|malicious|compromised|cve-\d{4}-\d{4,7}|"
+    r"fixed|patched|upgrade|affected)\b",
+    re.IGNORECASE,
+)
+_DISTRO_MENTION_RE = re.compile(
+    r"\b(?:debian|ubuntu|redhat|red\s+hat|rhel|cloudlinux|eurolinux|alpine|suse|sles|"
+    r"opensuse|fedora|centos|rocky|almalinux|oraclelinux|oracle\s+linux|amzn|"
+    r"amazon\s+linux|azurelinux|wolfi|chainguard|buster|bullseye|bookworm|trixie|"
+    r"focal|jammy|noble|rpm|deb|apk|dpkg)\b",
+    re.IGNORECASE,
+)
+_DISTRO_VERSION_MARKER_RE = re.compile(
+    r"(?:\+deb\d+|ubuntu|\.el\d+|\.fc\d+|-r\d+\b|tuxcare|lve)",
+    re.IGNORECASE,
+)
+
 # Strip invisible formatting code points (zero-width, soft hyphen, word joiner, BiDi) that
 # break exact substring matching in scraped HTML.
 _ZERO_WIDTH_RE = re.compile(r"[\u00ad\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]")
@@ -112,6 +149,28 @@ def _strip_package_wrappers(raw_name: str) -> str:
     return cleaned
 
 
+def _is_implied_branch_origin(introduced: str, upper_bound: str | None) -> bool:
+    """Return True when ``introduced`` is an implied ``.0`` branch origin for ``upper_bound``."""
+    if upper_bound is None:
+        return False
+    intro_clean = introduced.strip().lstrip("vV")
+    upper_clean = upper_bound.strip().lstrip("vV")
+    if not intro_clean or not upper_clean or intro_clean.casefold() == upper_clean.casefold():
+        return False
+    intro_parts = intro_clean.split(".")
+    if len(intro_parts) < 2 or not all(part.isdigit() for part in intro_parts):
+        return False
+    if len(intro_parts) >= 3 and intro_parts[-1] == "0":
+        branch_prefix = ".".join(intro_parts[:-1]) + "."
+        if upper_clean.startswith(branch_prefix):
+            return True
+    if all(part == "0" for part in intro_parts[1:]):
+        major_prefix = f"{intro_parts[0]}."
+        if upper_clean.startswith(major_prefix):
+            return True
+    return False
+
+
 def extract_claim_version_tokens(claim: ExtractedPackageClaim) -> tuple[str, ...]:
     """Extract non-``"0"`` version tokens from a claim's structured constraints.
 
@@ -124,10 +183,10 @@ def extract_claim_version_tokens(claim: ExtractedPackageClaim) -> tuple[str, ...
     tokens: list[str] = []
     seen: set[str] = set()
 
-    def _add(token: str) -> None:
+    def _add(token: str, *, allow_zero_sentinel: bool = False) -> None:
         cleaned = token.strip().rstrip(".,;:)")
-        # Exclude OSV origin sentinel "0" because prose quotes rarely contain literal "0".
-        if not cleaned or cleaned == "0":
+        # Exclude OSV origin sentinel "0" on introduced bounds only; fixed="0" must be grounded.
+        if not cleaned or (allow_zero_sentinel and cleaned == "0"):
             return
         key = cleaned.casefold()
         if key not in seen:
@@ -135,8 +194,18 @@ def extract_claim_version_tokens(claim: ExtractedPackageClaim) -> tuple[str, ...
             tokens.append(cleaned)
 
     for constraint in claim.version_constraints:
+        upper = constraint.fixed or constraint.last_affected
+        skip_implied_intro = constraint.introduced is not None and _is_implied_branch_origin(
+            constraint.introduced, upper
+        )
+        implied_intro_key = (
+            constraint.introduced.strip().rstrip(".,;:)").casefold()
+            if skip_implied_intro and constraint.introduced is not None
+            else None
+        )
+        if constraint.introduced is not None and not skip_implied_intro:
+            _add(constraint.introduced, allow_zero_sentinel=True)
         for bound in (
-            constraint.introduced,
             constraint.fixed,
             constraint.last_affected,
             constraint.exact,
@@ -145,6 +214,12 @@ def extract_claim_version_tokens(claim: ExtractedPackageClaim) -> tuple[str, ...
                 _add(bound)
         if constraint.raw_specifier is not None:
             for match in _VERSION_TOKEN_RE.findall(constraint.raw_specifier):
+                match_key = match.strip().rstrip(".,;:)").casefold()
+                if implied_intro_key is not None and (
+                    match_key == implied_intro_key
+                    or match_key.lstrip("v") == implied_intro_key.lstrip("v")
+                ):
+                    continue
                 _add(match)
 
     return tuple(tokens)
@@ -204,6 +279,10 @@ def extract_package_match_candidates(
     for item in expanded:
         variants = {
             item,
+            item.replace("::", "-"),
+            item.replace("::", "_"),
+            item.replace("::", " "),
+            item.replace("-", "::"),
             item.replace("-", "_"),
             item.replace("_", "-"),
             item.replace("-", " "),
@@ -593,12 +672,18 @@ def verify_quote_grounding(
         per_quote_flags.append((has_pkg, has_ver))
 
     package_token_found = any(has_pkg for has_pkg, _ in per_quote_flags)
-    version_tokens_found = (
+    missing_versions = tuple(
+        token
+        for token in version_tokens
+        if not any(_version_matches_quote(norm_q, token, candidates) for norm_q in norm_quotes)
+    )
+    any_version_found = (
         True if not version_tokens else any(has_ver for _, has_ver in per_quote_flags)
     )
+    version_tokens_found = True if not version_tokens else not missing_versions
     has_cooccurring_quote = any(has_pkg and has_ver for has_pkg, has_ver in per_quote_flags)
 
-    if has_cooccurring_quote:
+    if has_cooccurring_quote and not missing_versions:
         return GroundingResult(
             status=GroundingStatus.VERIFIED,
             match_type=overall_match_type,
@@ -614,12 +699,17 @@ def verify_quote_grounding(
         reasons.append(
             f"Quote matched article text but does not mention package '{claim.raw_package_name}'."
         )
-    if not version_tokens_found:
+    if not any_version_found:
         reasons.append(
             "Quote matched article text but does not contain any claimed version token "
             f"({', '.join(version_tokens)})."
         )
-    if package_token_found and version_tokens_found and not has_cooccurring_quote:
+    elif missing_versions:
+        reasons.append(
+            "Quote matched article text but is missing claimed version token(s) "
+            f"({', '.join(missing_versions)})."
+        )
+    if package_token_found and any_version_found and not has_cooccurring_quote:
         reasons.append(
             "Package name and version tokens were split across separate quotes without "
             "co-occurring in any single verified quote."
@@ -633,4 +723,126 @@ def verify_quote_grounding(
         version_tokens_found=version_tokens_found,
         matched_span=primary_span,
         reasons=tuple(reasons),
+    )
+
+
+def _quote_has_explicit_fix_for_version(norm_quote: str, version_token: str) -> bool:
+    """Return True if ``norm_quote`` binds exclusive/fix phrasing directly to ``version_token``."""
+    bare = version_token[1:] if version_token.lower().startswith("v") else version_token
+    escaped = re.escape(normalize_text(bare))
+    ver_pat = rf"(?<![a-z0-9.])v?{escaped}(?![a-z0-9])"
+    exclusive_pattern = re.compile(
+        rf"(?:\b(?:prior\s+to|before|earlier\s+than|fixed\s+in|patched\s+in|"
+        rf"resolved\s+in|upgrade\s+to|update\s+to|fixed\s+release)\s+{ver_pat}|<\s*{ver_pat})",
+        re.IGNORECASE,
+    )
+    return exclusive_pattern.search(norm_quote) is not None
+
+
+def check_quote_polarity(claim: ExtractedPackageClaim) -> tuple[bool, tuple[str, ...]]:
+    """Verify that quote semantics align with claimed ``fixed`` bounds and vulnerability context.
+
+    Catches common LLM inversions where tool copyright banners, compromised/malicious package
+    versions, or inclusive ``through <ver>`` phrases are mislabeled as ``fixed``.
+
+    Args:
+        claim: Extracted package claim to validate deterministically.
+
+    Returns:
+        Tuple ``(is_consistent, diagnostic_reasons)``.
+    """
+    combined = normalize_text(" ".join((claim.evidence_quote, *claim.supporting_quotes)))
+    if not combined:
+        return True, ()
+
+    reasons: list[str] = []
+
+    # 1) Reject copyright/tool-banner quotes that lack any vulnerability/fix context.
+    if not _VULN_CONTEXT_PHRASE_RE.search(combined) and (
+        re.search(r"\bcopyright\b", combined) is not None
+    ):
+        reasons.append(
+            "Evidence quote appears to be a copyright or banner notice without vulnerability "
+            "context."
+        )
+
+    has_fix_phrasing = _FIX_PHRASING_RE.search(combined) is not None
+    has_malicious_phrase = _MALICIOUS_COMPROMISE_PHRASE_RE.search(combined) is not None
+
+    for constraint in claim.version_constraints:
+        if constraint.fixed is None:
+            continue
+        fixed_clean = normalize_text(constraint.fixed)
+        bare_fixed = (
+            fixed_clean[1:] if fixed_clean.startswith("v") and len(fixed_clean) > 1 else fixed_clean
+        )
+        escaped_fixed = re.escape(bare_fixed)
+        ver_pat = rf"(?<![a-z0-9.])v?{escaped_fixed}(?![a-z0-9])"
+
+        # 2) Malicious/compromised package wording without fix language must not claim "fixed".
+        if has_malicious_phrase and not has_fix_phrasing:
+            reasons.append(
+                f"Claim sets fixed='{constraint.fixed}' while quote describes a compromised or "
+                "malicious release without naming a fix version."
+            )
+            continue
+
+        # 3) Inclusive or confirmed-vulnerable wording paired with `fixed` -> polarity conflict.
+        inclusive_re = re.compile(
+            rf"(?:\b(?:through|up\s+to\s+and\s+including)\s+{ver_pat}|"
+            rf"{ver_pat}\s+and\s+(?:earlier|prior|older|below)|"
+            rf"\b(?:confirmed\s+against|got\s+code\s+execution)\b[^.?!]{{0,60}}{ver_pat})",
+            re.IGNORECASE,
+        )
+        if inclusive_re.search(combined) is not None and not _quote_has_explicit_fix_for_version(
+            combined, bare_fixed
+        ):
+            reasons.append(
+                f"Claim sets fixed='{constraint.fixed}' while quote describes it as an inclusive "
+                "or confirmed-affected version."
+            )
+
+    return (len(reasons) == 0), tuple(dict.fromkeys(reasons))
+
+
+def check_distro_quote_grounding(
+    claim: ExtractedPackageClaim,
+    *,
+    ecosystem: str | None,
+    namespace: str | None,
+) -> tuple[bool, tuple[str, ...]]:
+    """Verify OS distro package claims are anchored in distro evidence in their quotes.
+
+    Prevents LLMs from fabricating ``deb``/``rpm``/``apk`` package claims out of upstream
+    application advisories that never mention OS vendor packages.
+
+    Args:
+        claim: Extracted package claim under evaluation.
+        ecosystem: Normalized PURL ecosystem type (e.g., ``"deb"``, ``"rpm"``, ``"apk"``).
+        namespace: Normalized package namespace (e.g., ``"debian"``, ``"ubuntu"``).
+
+    Returns:
+        Tuple ``(is_grounded_distro, diagnostic_reasons)``.
+    """
+    if ecosystem not in {"deb", "rpm", "apk"}:
+        return True, ()
+
+    combined = normalize_text(" ".join((claim.evidence_quote, *claim.supporting_quotes)))
+    if not combined:
+        return False, ("OS distro claim has empty evidence quote.",)
+
+    if (
+        _DISTRO_MENTION_RE.search(combined) is not None
+        or _DISTRO_VERSION_MARKER_RE.search(combined) is not None
+    ):
+        return True, ()
+
+    if namespace:
+        ns_norm = normalize_text(namespace)
+        if ns_norm and _contains_token_boundary(combined, ns_norm):
+            return True, ()
+
+    return False, (
+        f"OS distro claim ({ecosystem}/{namespace or 'unknown'}) lacks distro package or version "
+        "evidence inside the cited quote.",
     )

@@ -16,7 +16,7 @@ import socket
 import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -221,27 +221,64 @@ def _fallback_html_to_text(html: str) -> str:
     return _WHITESPACE_RE.sub(" ", unescaped).strip()
 
 
-def extract_article_text(
+def _parse_html_metadata_date(
+    raw_date: object,
+    *,
+    now: datetime | None = None,
+) -> datetime | None:
+    """Parse an HTML metadata publication date into bounded UTC, if valid.
+
+    Args:
+        raw_date: Candidate metadata date value returned by ``trafilatura``.
+        now: Reference timestamp for future-date sanity checks. Defaults to UTC now.
+
+    Returns:
+        Normalized UTC datetime when ``raw_date`` parses as ISO-8601/YYYY-MM-DD and falls
+        within ``[1990-01-01, now + 2 days]``; otherwise ``None``.
+    """
+    if isinstance(raw_date, datetime):
+        parsed = (
+            raw_date.replace(tzinfo=UTC) if raw_date.tzinfo is None else raw_date.astimezone(UTC)
+        )
+    elif isinstance(raw_date, str):
+        candidate = raw_date.strip()
+        if not candidate:
+            return None
+        try:
+            parsed = datetime.fromisoformat(candidate)
+        except ValueError:
+            return None
+        parsed = parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
+    else:
+        return None
+
+    ref_now = now or datetime.now(UTC)
+    if parsed.year < 1990 or parsed > ref_now + timedelta(days=2):
+        return None
+    return parsed
+
+
+def extract_article_metadata_and_text(
     raw_bytes: bytes,
     content_type: str,
     *,
     fallback_title: str = "Untitled Advisory",
-) -> tuple[str, str]:
-    """Extract clean ``(title, body)`` text from fetched HTML or plain-text bytes.
+) -> tuple[str, str, datetime | None]:
+    """Extract sanitized title, plain-text body, and optional publication date.
 
     Args:
-        raw_bytes: Downloaded response bytes.
-        content_type: Normalized MIME content type.
-        fallback_title: Title used when HTML lacks extractable title metadata.
+        raw_bytes: Raw downloaded document payload.
+        content_type: Normalized HTTP Content-Type media type.
+        fallback_title: Title used when extraction yields no usable title.
 
     Returns:
-        Tuple of ``(title, cleaned_body)``.
+        Tuple of ``(clean_title, clean_body, extracted_published_at)``.
     """
     decoded = raw_bytes.decode("utf-8", errors="replace")
     media_type = content_type.split(";", 1)[0].strip().lower()
 
     if media_type == "text/plain":
-        return fallback_title, _strip_disallowed_control_chars(decoded)
+        return fallback_title, _strip_disallowed_control_chars(decoded), None
 
     # Lazy-import trafilatura here to keep CLI startup fast and suppress urllib3's benign
     # PySocks DependencyWarning emitted on module import.
@@ -260,6 +297,8 @@ def extract_article_text(
     title: str | None = None
     metadata = trafilatura.extract_metadata(decoded)
     meta_title = getattr(metadata, "title", None) if metadata is not None else None
+    meta_date = getattr(metadata, "date", None) if metadata is not None else None
+    extracted_published_at = _parse_html_metadata_date(meta_date)
     if isinstance(meta_title, str) and meta_title.strip():
         title = meta_title.strip()
     elif title_match := _TITLE_TAG_RE.search(decoded):
@@ -270,7 +309,31 @@ def extract_article_text(
     raw_title = _WHITESPACE_RE.sub(" ", _strip_disallowed_control_chars(title or fallback_title))
     clean_title = raw_title.strip() or fallback_title
     clean_body = _strip_disallowed_control_chars(body)
-    return clean_title, clean_body
+    return clean_title, clean_body, extracted_published_at
+
+
+def extract_article_text(
+    raw_bytes: bytes,
+    content_type: str,
+    *,
+    fallback_title: str = "Untitled Advisory",
+) -> tuple[str, str]:
+    """Extract clean ``(title, body)`` text from fetched HTML or plain-text bytes.
+
+    Args:
+        raw_bytes: Downloaded response bytes.
+        content_type: Normalized MIME content type.
+        fallback_title: Title used when HTML lacks extractable title metadata.
+
+    Returns:
+        Tuple of ``(title, cleaned_body)``.
+    """
+    title, body, _ = extract_article_metadata_and_text(
+        raw_bytes,
+        content_type,
+        fallback_title=fallback_title,
+    )
+    return title, body
 
 
 def compute_content_sha256(text: str) -> str:
@@ -471,6 +534,7 @@ class SafeHttpFetcher:
         source_name: str,
         source_tier: SourceTier = SourceTier.UNKNOWN,
         published_at: datetime | None = None,
+        published_at_inferred: bool = False,
         conditional_headers: dict[str, str] | None = None,
     ) -> tuple[RawArticle | None, FetchResponse]:
         """Fetch an HTML/text blog post and extract a normalized :class:`RawArticle`.
@@ -480,6 +544,8 @@ class SafeHttpFetcher:
             source_name: Human-readable feed/publisher name.
             source_tier: Source credibility tier.
             published_at: Optional publication timestamp (defaults to current UTC time).
+            published_at_inferred: Whether ``published_at`` was synthesized rather than stated in
+                feed/sitemap metadata.
             conditional_headers: Optional ``If-None-Match`` / ``If-Modified-Since`` headers.
 
         Returns:
@@ -493,18 +559,31 @@ class SafeHttpFetcher:
         if resp.not_modified:
             return None, resp
 
-        title, body = extract_article_text(resp.body, resp.content_type)
+        title, body, html_published_at = extract_article_metadata_and_text(
+            resp.body,
+            resp.content_type,
+        )
         if not body:
             raise FetchError(f"Extracted article body was empty for {resp.final_url}.")
 
         now = datetime.now(UTC)
+        resolved_published_at = published_at
+        resolved_inferred = published_at_inferred
+        if (published_at is None or published_at_inferred) and html_published_at is not None:
+            resolved_published_at = html_published_at
+            resolved_inferred = False
+        elif resolved_published_at is None:
+            resolved_published_at = now
+            resolved_inferred = True
+
         article = RawArticle(
             url=resp.final_url,
             title=title,
             body=body,
             source_name=source_name,
             source_tier=source_tier,
-            published_at=published_at or now,
+            published_at=resolved_published_at,
+            published_at_inferred=resolved_inferred,
             fetched_at=now,
         )
         return article, resp
