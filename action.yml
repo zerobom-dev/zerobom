@@ -110,7 +110,7 @@ inputs:
   zerobom-version:
     description: "Pinned zerobom package version for uvx, or 'local' to run from current checkout."
     required: false
-    default: "0.1.0"
+    default: "0.1.1"
   cache-state:
     description: "Cache SQLite state under .zerobom across workflow runs ('true' or 'false')."
     required: false

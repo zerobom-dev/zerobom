@@ -40,6 +40,8 @@ class TestCliVersionAndPackagingMetadata:
         pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
         expected_version = pyproject["project"]["version"]
         assert zerobom.__version__ == expected_version
+        action_yml = yaml.safe_load((REPO_ROOT / "action.yml").read_text(encoding="utf-8"))
+        assert action_yml["inputs"]["zerobom-version"]["default"] == expected_version
 
         for flag in ("--version", "-V"):
             res = RUNNER.invoke(cli.app, [flag])
