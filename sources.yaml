@@ -199,7 +199,7 @@ feeds:
   - name: "Palo Alto Networks Unit 42"
     url: "https://unit42.paloaltonetworks.com/category/threat-research/feed/"
     tier: "tier_1"
-    enabled: false
+    enabled: true
     tags:
       - threat-research
       - itw-exploitation
@@ -390,7 +390,7 @@ feeds:
   - name: "Rapid7 Blog"
     url: "https://www.rapid7.com/rss.xml"
     tier: "tier_2"
-    enabled: false
+    enabled: true
     tags:
       - zero-day
       - itw-exploitation
@@ -491,7 +491,7 @@ feeds:
   - name: "Microsoft Security Blog"
     url: "https://www.microsoft.com/en-us/security/blog/feed/"
     tier: "tier_2"
-    enabled: false
+    enabled: true
     tags:
       - advisories
       - zero-day
@@ -518,7 +518,7 @@ feeds:
     kind: "html_index"
     url_prefix: "https://semgrep.dev/blog/"
     tier: "tier_2"
-    enabled: false
+    enabled: true
     tags:
       - open-source
       - supply-chain
@@ -548,7 +548,7 @@ feeds:
     kind: "html_index"
     url_prefix: "https://www.sysdig.com/blog/"
     tier: "tier_2"
-    enabled: false
+    enabled: true
     tags:
       - cloud
       - containers
@@ -558,7 +558,7 @@ feeds:
     kind: "html_index"
     url_prefix: "https://www.elastic.co/security-labs/"
     tier: "tier_2"
-    enabled: false
+    enabled: true
     tags:
       - research
       - detection
@@ -594,7 +594,7 @@ feeds:
   - name: "The Hacker News"
     url: "https://feeds.feedburner.com/TheHackersNews"
     tier: "unknown"
-    enabled: false
+    enabled: true
     tags:
       - news
       - supply-chain
